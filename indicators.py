@@ -5,13 +5,13 @@ from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-import talib
+import pandas_ta as ta
 from numba import njit
 
-from models import OptionType, TransactionType
+from models import DATASTORE, OptionType, TransactionType
 from observer_pattern import IEventListener, IEventManager
 
-TIMEFRAME = 3
+TIMEFRAME = 2
 
 WINDOWS = {
     "sma": 50,
@@ -24,7 +24,6 @@ WINDOWS = {
 
 
 class Indicator(IEventManager, IEventListener):
-    __dataStore = "financial_data.h5"
     df_incomplete = defaultdict(pd.DataFrame)
 
     def __init__(self):
@@ -32,12 +31,12 @@ class Indicator(IEventManager, IEventListener):
         self.data = defaultdict(pd.DataFrame)
         self.window = max(WINDOWS.values()) + 1
 
-        watchlist = pd.read_hdf(self.__dataStore, "/watchlist", mode="r")
+        watchlist = pd.read_hdf(DATASTORE, "/watchlist", mode="r")
         for item in watchlist.itertuples():
             filename = item.filename
             token = item.Index
             try:
-                df = pd.read_hdf(self.__dataStore, f"/{filename}", mode="r").tail(self.window * TIMEFRAME)
+                df = pd.read_hdf(DATASTORE, f"/{filename}", mode="r").tail(self.window * TIMEFRAME)
                 df = (
                     df.resample(f"{TIMEFRAME}T")
                     .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
@@ -80,8 +79,6 @@ class Indicator(IEventManager, IEventListener):
         if self.data[token].shape[0] == self.window + 1:
             self.data[token].drop(self.data[token].index[:1], inplace=True)
 
-        print(self.data[token].shape)
-
         if self.data[token].shape[0] < self.window:
             return
 
@@ -121,18 +118,18 @@ class Indicator(IEventManager, IEventListener):
         return
 
     def SMA(self, data, period: int = 20):
-        return talib.SMA(data["close"], timeperiod=period)
+        return ta.sma(data["close"], timeperiod=period)
 
     def RSI(self, data, period: int = 14):
-        return talib.RSI(data["close"], timeperiod=period)
+        return ta.rsi(data["close"], timeperiod=period)
 
     def SUPERTREND(self, data, period: int = 7, multiplier: int = 3):
         high = data["high"]
         low = data["low"]
         close = data["close"]
 
-        avg_price = talib.MEDPRICE(high, low)
-        atr = talib.ATR(high, low, close, period)
+        avg_price = ta.midprice(high, low)
+        atr = ta.atr(high, low, close, period)
         matr = multiplier * atr
         upper = avg_price + matr
         lower = avg_price - matr
@@ -163,37 +160,6 @@ def _get_final_bands_nb(close, upper, lower):
             trend[i] = upper[i]
 
     return trend, direction
-
-
-@njit
-def reduce_maximum(a, b, c):
-    if a >= b and a >= c:
-        return a
-    elif b >= a and b >= c:
-        return b
-    else:
-        return c
-
-
-@njit
-def calculate_supertrend(close, high, low, period=7, multiplier=3):
-    supertrend = np.zeros_like(close)
-    hl_avg = (high + low) / 2
-    atr = np.zeros_like(close)
-
-    for i in range(period, len(close)):
-        tr = reduce_maximum(high[i] - low[i], np.abs(high[i] - close[i - 1]), np.abs(low[i] - close[i - 1]))
-        atr[i] = (atr[i - 1] * (period - 1) + tr) / period
-        upper_band = hl_avg[i] + (multiplier * atr[i])
-        lower_band = hl_avg[i] - (multiplier * atr[i])
-        if close[i] > lower_band:
-            supertrend[i] = 1
-        elif close[i] < upper_band:
-            supertrend[i] = -1
-        else:
-            supertrend[i] = supertrend[i - 1]
-
-    return supertrend
 
 
 @njit

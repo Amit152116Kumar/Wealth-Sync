@@ -5,7 +5,7 @@ import time
 from collections import defaultdict
 
 import pandas as pd
-
+from models import DATASTORE
 from indicators import Indicator
 from kotakclient import KotakClient
 from observer_pattern import IEventListener, IEventManager
@@ -15,7 +15,6 @@ from portfolio import Portfolio
 class LiveFeed(IEventManager):
     dataList = defaultdict(list)
     __broadcast_live = "https://wstreamer.kotaksecurities.com/feed"
-    __dataStore = "financial_data.h5"
     __columns = ["datetime", "open", "high", "low", "close", "volume", "OI"]
     __watchlist = None
     __instance = None
@@ -36,7 +35,7 @@ class LiveFeed(IEventManager):
 
     @property
     def __get_watchlist(self) -> pd.DataFrame:
-        df = pd.read_hdf(self.__dataStore, "/watchlist", mode="r")
+        df = pd.read_hdf(DATASTORE, "/watchlist", mode="r")
         return df
 
     @property
@@ -130,7 +129,7 @@ class LiveFeed(IEventManager):
             
             filename = df_watchlist._get_value(token, "filename")
             completed_df.to_hdf(
-                cls.__dataStore, key=filename, mode="a", append=True, format="table", complevel=9, complib="blosc:lz4", data_columns=True
+                DATASTORE, key=filename, mode="a", append=True, format="table", complevel=9, complib="blosc:lz4", data_columns=True
             )
             cls.df_notify[token] = pd.concat([cls.df_notify[token], completed_df])
             flag = True
@@ -165,24 +164,23 @@ class LiveFeed(IEventManager):
 
 if __name__ == "__main__":
     livefeed = LiveFeed()
-    livefeed.subscribe()
-    ques = input("Press any key to unsubscribe : ")
-    if ques:
-        livefeed.unsubscribe()
-    # counter = 0
-    # while True:
-    #     livefeed.connect_event()
-    #     price = random.randint(18000, 19000)
-    #     data = ("NIFTY", 11721, 0, 0, 0, 0, price, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, datetime.datetime.now())
-    #     time.sleep(1)
-    #     livefeed.callback_method(data)
-    #     price = random.randint(42000, 43000)
-    #     data = ("NIFTY", 11717, 0, 0, 0, 0, price, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, datetime.datetime.now())
-    #     livefeed.callback_method(data)
-    #     counter += 1
-    #     if counter == 27:
-    #         start = time.perf_counter()
-    #         livefeed.disconnect_event()
-    #         print("--------------------")
-    #         counter = 0
-    #         time.sleep(3)
+    indicator = Indicator()
+    livefeed.attachObserver(indicator)
+    
+    counter = 0
+    while True:
+        livefeed.connect_event()
+        price = random.randint(18000, 19000)
+        data = ("NIFTY", 11721, 0, 0, 0, 0, price, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, datetime.datetime.now())
+        time.sleep(1)
+        livefeed.callback_method(data)
+        price = random.randint(42000, 43000)
+        data = ("NIFTY BANK", 11717, 0, 0, 0, 0, price, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, datetime.datetime.now())
+        livefeed.callback_method(data)
+        counter += 1
+        if counter == 27:
+            start = time.perf_counter()
+            livefeed.disconnect_event()
+            print("--------------------")
+            counter = 0
+            time.sleep(3)

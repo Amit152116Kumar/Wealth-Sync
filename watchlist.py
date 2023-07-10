@@ -5,10 +5,9 @@ import os
 import pandas as pd
 import requests
 from dotenv import load_dotenv, set_key
-
+from models import DATASTORE
 
 class Watchlist:
-    __dataStore = "financial_data.h5"
 
     def __init__(self) -> None:
         load_dotenv("config.env")
@@ -37,7 +36,7 @@ class Watchlist:
             cash_token["expiry"].replace({0: pd.NaT}, inplace=True)
             cash_token.rename(columns={"OptionType": "optionType"}, inplace=True)
             cash_token.to_hdf(
-                self.__dataStore,
+                DATASTORE,
                 "/tokens/cashTokens",
                 mode="a",
                 append=False,
@@ -52,7 +51,7 @@ class Watchlist:
             fno_token = pd.read_csv(res["Success"]["fno"], sep="|", index_col="instrumentToken")
             fno_token.drop(["tickSize", "isin", "multiplier", "exchangeToken"], axis=1, inplace=True)
             fno_token.to_hdf(
-                self.__dataStore,
+                DATASTORE,
                 "/tokens/fnoTokens",
                 mode="a",
                 append=False,
@@ -69,7 +68,7 @@ class Watchlist:
         return True
 
     def add_to_watchlist(self, is_fno=False, **kwargs):
-        dataStore = self.__dataStore
+        dataStore = DATASTORE
         if is_fno:
             key = "/tokens/fnoTokens"
             try:
@@ -140,7 +139,7 @@ class Watchlist:
     # Get Watchlist
     @classmethod
     def get_watchlist(self) -> pd.DataFrame:
-        hdf = pd.HDFStore(self.__dataStore, mode="r")
+        hdf = pd.HDFStore(DATASTORE, mode="r")
         key = "/watchlist"
         if key in hdf.keys():
             df = hdf.get(key)
@@ -154,7 +153,7 @@ class Watchlist:
     # Delete Token from Watchlist
 
     def remove_from_watchlist(self):
-        df = pd.read_hdf(self.__dataStore, "/watchlist", mode="r")
+        df = pd.read_hdf(DATASTORE, "/watchlist", mode="r")
         print(df)
         tokenID = int(input("Enter Token ID to delete : "))
         if tokenID not in df["instrumentToken"].values:
@@ -162,7 +161,7 @@ class Watchlist:
             return {"status": "error", "message": "Token ID not in Watchlist"}
         df = df.drop(df[df["instrumentToken"] == tokenID].index)
         df.to_hdf(
-            self.__dataStore,
+            DATASTORE,
             "/watchlist",
             mode="a",
             append=False,
