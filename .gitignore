@@ -1,0 +1,10 @@
+*.csv
+*.txt
+*.log
+__pycache__/
+*.h5
+*.env
+*.json
+!requirements.txt
+!holiday.csv
+read.py

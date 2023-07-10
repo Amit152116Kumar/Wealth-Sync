@@ -1,0 +1,21 @@
+h5py
+-e git+https://github.com/Amit152116Kumar/ksapi.git@828f628cc676f03e2cefe2af439d8dbe0f27e626#egg=ks_api_client&subdirectory=python
+msgpack
+numexpr
+numpy
+packaging
+pandas
+py-cpuinfo
+python-dateutil
+python-dotenv
+python-engineio
+python-socketio
+pytz
+requests
+six
+tables
+tzdata
+urllib3
+websocket-client
+uvicorn
+fastapi
