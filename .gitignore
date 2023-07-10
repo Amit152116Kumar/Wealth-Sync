@@ -5,6 +5,7 @@ __pycache__/
 *.h5
 *.env
 *.json
+!vercel.json
 !requirements.txt
 !holiday.csv
 read.py
