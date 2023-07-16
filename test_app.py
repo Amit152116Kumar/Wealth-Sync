@@ -8,8 +8,12 @@ def test_home():
     response = client.get("/")
     assert response.status_code == status.HTTP_200_OK
     
-def test_livefeed():
-    response = client.get("/livefeed")
+def test_subscribe():
+    response = client.get("/subscribe")
+    assert response.status_code == status.HTTP_200_OK
+
+def test_unsubscribe():
+    response = client.get("/unsubscribe")
     assert response.status_code == status.HTTP_200_OK
     
 def test_orders():
