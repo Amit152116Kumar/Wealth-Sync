@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-
+    timeout-minutes: 5
     runs-on: ubuntu-latest
 
     steps:
@@ -35,5 +35,14 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
+      env:
+        ACCESS_TOKEN: ${{secrets.ACCESS_TOKEN}}
+        CONSUMER_KEY: ${{secrets.CONSUMER_KEY}}
+        GMAIL_USERNAME: ${{secrets.GMAIL_USERNAME}}
+        GMAIL_PASSWORD: ${{secrets.GMAIL_PASSWORD}}
+        HOST: ${{secrets.HOST}}
+        PASSWORD: ${{secrets.PASSWORD}}
+        SECRET_KEY: ${{secrets.SECRET_KEY}}
+        USERID: ${{secrets.USERID}}
       run: |
         pytest

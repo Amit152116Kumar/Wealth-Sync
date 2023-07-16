@@ -4,13 +4,14 @@ import time
 from imaplib import IMAP4_SSL
 
 from dotenv import load_dotenv, set_key
+
 from ks_api_client import ks_api
 
 
 class KotakClient:
     __instance = None
     __client = None
-    
+
     def __new__(cls):
         if not cls.__instance:
             cls.__instance = super(KotakClient, cls).__new__(cls)
@@ -18,12 +19,12 @@ class KotakClient:
 
     def __init__(self) -> None:
         load_dotenv("config.env")
-        self.__host = os.getenv("host")
-        self.__consumer_key = os.getenv("consumer_key")
-        self.__access_token = os.getenv("access_token")
-        self.__secret_key = os.getenv("secret_key")
+        self.__host = os.getenv("HOST")
+        self.__consumer_key = os.getenv("CONSUMER_KEY")
+        self.__access_token = os.getenv("ACCESS_TOKEN")
+        self.__secret_key = os.getenv("SECRET_KEY")
         self.__client = self.__client_login()
-        
+
     def __del__(self):
         pass
 
@@ -36,9 +37,8 @@ class KotakClient:
 
     def __client_login(self):
         # Fetch access code from txt file
-        access_code = os.getenv("access_code")
-        user_id = os.getenv("user_id")
-        password = os.getenv("password")
+        user_id = os.getenv("USERID")
+        password = os.getenv("PASSWORD")
 
         try:
             client = ks_api.KSTradeApi(
@@ -58,7 +58,9 @@ class KotakClient:
         print(f"\n{login_response['Success']['message']}")  # type: ignore
 
         # Get session for 2FA authentication if doesn't exist then fetch
-        # access code from mail and login again
+        # access code from mail and login 
+        time.sleep(1)
+        access_code = self.__fetch_access_code()
         while True:
             try:
                 response = client.session_2fa(access_code=access_code)
@@ -67,7 +69,7 @@ class KotakClient:
                 break
             except Exception as e:
                 print("Error in Login : ", e)
-                time.sleep(10)
+                time.sleep(2)
                 access_code = self.__fetch_access_code()
 
         # Client instance
@@ -75,8 +77,8 @@ class KotakClient:
 
     @staticmethod
     def __fetch_access_code():
-        username = os.getenv("gmail_username")
-        password = os.getenv("gmail_password")
+        username = os.getenv("GMAIL_USERNAME")
+        password = os.getenv("GMAIL_PASSWORD")
         mail = IMAP4_SSL("imap.gmail.com")
         mail.login(username, password)  # type: ignore
         mail.select("inbox")
@@ -88,7 +90,6 @@ class KotakClient:
             if isinstance(response, tuple):
                 msg = email.message_from_bytes(response[1])
                 access_code = msg["Subject"].split(" ")[-1]
-                set_key("config.env", "access_code", access_code)
                 return str(access_code)
         return None
 
