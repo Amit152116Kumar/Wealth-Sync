@@ -51,11 +51,20 @@ on:
     branches: [ "master" ]
 
 env:
-  PROJECT_ID: theta-reserve-385117 
-  SERVICE: kotakapi-2-0  
+  PROJECT_ID: theta-reserve-385117
+  SERVICE: kotakapi-2
   REGION: us-central1
   WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }}
   WIF_SERVICE_ACCOUNT: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+  ACCESS_TOKEN: ${{secrets.ACCESS_TOKEN}}
+  CONSUMER_KEY: ${{secrets.CONSUMER_KEY}}
+  GMAIL_USERNAME: ${{secrets.GMAIL_USERNAME}}
+  GMAIL_PASSWORD: ${{secrets.GMAIL_PASSWORD}}
+  HOST: ${{secrets.HOST}}
+  PASSWORD: ${{secrets.PASSWORD}}
+  SECRET_KEY: ${{secrets.SECRET_KEY}}
+  USERID: ${{secrets.USERID}}
+  FIRESTORE_KEY: ${{secrets.FIRESTORE_KEY}}
 
 jobs:
   deploy:
