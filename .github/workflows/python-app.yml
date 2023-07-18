@@ -44,5 +44,6 @@ jobs:
         PASSWORD: ${{secrets.PASSWORD}}
         SECRET_KEY: ${{secrets.SECRET_KEY}}
         USERID: ${{secrets.USERID}}
+        FIRESTORE_KEY: ${{secrets.FIRESTORE_KEY}}
       run: |
         pytest

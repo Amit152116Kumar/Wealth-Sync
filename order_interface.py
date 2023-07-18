@@ -25,7 +25,7 @@ class IOrderClient(ABC):
     @abstractmethod
     def get_funds(self):
         pass
-    
+
     @abstractmethod
     def get_position(self, position_Type: PositionType):
         pass

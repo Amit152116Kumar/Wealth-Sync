@@ -6,21 +6,12 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
+from firebase_admin import firestore
 from numba import njit
 
-from models import DATASTORE, OptionType, TransactionType
+from firestore import db
+from models import OptionType, TransactionType
 from observer_pattern import IEventListener, IEventManager
-
-TIMEFRAME = 2
-
-WINDOWS = {
-    "sma": 50,
-    "rsi": 40,
-    "fast_multiplier": 4,
-    "fast_period": 14,
-    "slow_multiplier": 4,
-    "slow_period": 48,
-}
 
 
 class Indicator(IEventManager, IEventListener):
@@ -28,25 +19,39 @@ class Indicator(IEventManager, IEventListener):
 
     def __init__(self):
         self._observers = set()
-        self.data = defaultdict(pd.DataFrame)
-        self.window = max(WINDOWS.values()) + 1
+        self.df_complete = defaultdict(pd.DataFrame)
+        self.strategy = defaultdict(dict)
+        self.window = defaultdict(int)
+        self.timeframe = defaultdict(int)
+        docs = db.collection("watchlist").stream()
 
-        watchlist = pd.read_hdf(DATASTORE, "/watchlist", mode="r")
-        for item in watchlist.itertuples():
-            filename = item.filename
-            token = item.Index
+        for doc in docs:
+            id = doc.id
+            token = doc.get("instrumentToken")
             try:
-                df = pd.read_hdf(DATASTORE, f"/{filename}", mode="r").tail(self.window * TIMEFRAME)
-                df = (
-                    df.resample(f"{TIMEFRAME}T")
-                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
-                    .dropna()
-                )
-                self.data[token] = df.tail(self.window)
-                print(token, self.data[token].shape)
+                strategy = db.collection("watchlist").document(id).collection("strategy").get()[0]
 
-            except KeyError:
-                print(f"KeyError: {filename}")
+                self.timeframe[token] = strategy.get("timeframe")
+                data_dict = strategy.to_dict()
+                data_dict.pop("timeframe")
+                self.strategy[token] = data_dict
+                self.window[token] = max(data_dict.values())
+
+                df = []
+                livefeed_ref = db.collection("livefeed").document(id).collection(datetime.datetime.today().strftime("%Y"))
+                livefeed_stream = livefeed_ref.limit(self.window[token] * self.timeframe[token]).stream()
+                for livefeed in livefeed_stream:
+                    dict_data = livefeed.to_dict()
+                    dict_data["datetime"] = livefeed.id
+                    df.append(dict_data)
+                df = pd.DataFrame(df)
+                df["datetime"] = pd.to_datetime(df["datetime"])
+                df = df.resample(f"{self.timeframe[token]}T", on="datetime").agg(
+                    {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"}
+                )
+                self.df_complete[token] = df.tail(self.window[token])
+                print(token, self.df_complete[token].shape, self.df_complete[token].tail(5), sep="\n")
+            except Exception as e:
                 continue
 
     def attachObserver(self, observer: IEventListener):
@@ -64,6 +69,9 @@ class Indicator(IEventManager, IEventListener):
         return super().notifyObserver()
 
     def data_handler(self, token, df):
+        TIMEFRAME = self.timeframe[token]
+        STRATEGY = self.strategy[token]
+        WINDOW = self.window[token]
         df = df.resample(f"{TIMEFRAME}T").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
 
         df = pd.concat([self.df_incomplete[token], df])
@@ -75,31 +83,17 @@ class Indicator(IEventManager, IEventListener):
         if completed_df.shape[0] == 0:
             return
 
-        self.data[token] = pd.concat([self.data[token], completed_df])
-        if self.data[token].shape[0] == self.window + 1:
-            self.data[token].drop(self.data[token].index[:1], inplace=True)
+        self.df_complete[token] = pd.concat([self.df_complete[token], completed_df])
+        if self.df_complete[token].shape[0] == WINDOW + 1:
+            self.df_complete[token].drop(self.df_complete[token].index[:1], inplace=True)
 
-        if self.data[token].shape[0] < self.window:
+        if self.df_complete[token].shape[0] < WINDOW:
             return
 
-        start = time.perf_counter()
-        sma = self.SMA(self.data[token], WINDOWS["sma"]).values < self.data[token]["close"].values
-        rsi = self.RSI(self.data[token], WINDOWS["rsi"]).values > 50
-        (fast_trend, fast_direction) = self.SUPERTREND(self.data[token], WINDOWS["fast_period"], WINDOWS["fast_multiplier"])
-        (slow_trend, slow_direction) = self.SUPERTREND(self.data[token], WINDOWS["slow_period"], WINDOWS["slow_multiplier"])
-
-        # print(sma[-3:], rsi[-3:], fast_trend[-3:], slow_trend[-3:], fast_direction[-3:], slow_direction[-3:], sep="\n")
-        # end = time.perf_counter()
-        # print(f"Time taken: {end - start:.4f} seconds")
-
-        # sma = calculate_sma(self.data[token]["close"].values, WINDOWS['sma'])
-        # rsi = self.RSI(self.data[token], WINDOWS['rsi']).values
-        # fast_trend = calculate_supertrend(self.data[token]["close"].values, self.data[token]["high"].values, self.data[token]["low"].values, WINDOWS['fast_period'], WINDOWS["fast_multiplier"])
-        # slow_trend = calculate_supertrend(self.data[token]["close"].values, self.data[token]["high"].values, self.data[token]["low"].values, WINDOWS['slow_period'], WINDOWS["slow_multiplier"])
-
-        # print(sma[-3:], rsi[-3:], fast_trend[-3:], slow_trend[-3:], sep="\n")
-        # print(f"Time taken: { time.perf_counter()- end:.4f} seconds")
-        # if last values of sma, rsi, fast_trend, slow_trend are True, then buy
+        sma = self.SMA(self.df_complete[token], STRATEGY["sma"]).values < self.df_complete[token]["close"].values
+        rsi = self.RSI(self.df_complete[token], STRATEGY["rsi"]).values > 50
+        (fast_trend, fast_direction) = self.SUPERTREND(self.df_complete[token], STRATEGY["fast_period"], STRATEGY["fast_multiplier"])
+        (slow_trend, slow_direction) = self.SUPERTREND(self.df_complete[token], STRATEGY["slow_period"], STRATEGY["slow_multiplier"])
 
         if sma[-1] and rsi[-1] and fast_trend[-1] and slow_trend[-1] and fast_direction[-1] and slow_direction[-1]:
             self.notifyObserver(token, TransactionType.buy, OptionType.call)
@@ -114,7 +108,7 @@ class Indicator(IEventManager, IEventListener):
 
     def update(self, *args):
         for token, df in args[0].items():
-            self.data_handler(token, df)
+            self.df_complete_handler(token, df)
         return
 
     def SMA(self, data, period: int = 20):

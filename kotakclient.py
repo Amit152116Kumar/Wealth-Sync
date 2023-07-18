@@ -58,8 +58,8 @@ class KotakClient:
         print(f"\n{login_response['Success']['message']}")  # type: ignore
 
         # Get session for 2FA authentication if doesn't exist then fetch
-        # access code from mail and login 
-        time.sleep(1)
+        # access code from mail and login
+        time.sleep(5)
         access_code = self.__fetch_access_code()
         while True:
             try:
@@ -69,7 +69,7 @@ class KotakClient:
                 break
             except Exception as e:
                 print("Error in Login : ", e)
-                time.sleep(2)
+                time.sleep(10)
                 access_code = self.__fetch_access_code()
 
         # Client instance

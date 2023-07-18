@@ -12,3 +12,7 @@ numba
 httpx
 urllib3
 requests
+six >= 1.10
+python_dateutil >= 2.5.3
+setuptools >= 21.0.0
+firebase_admin

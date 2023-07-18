@@ -3,6 +3,7 @@
 *.log
 __pycache__/
 *.h5
+*.hdf5
 *.env
 *.json
 !vercel.json
@@ -10,3 +11,5 @@ __pycache__/
 !holiday.csv
 read.py
 /src
+FIRESTORE_KEY
+!tokens.hdf5

@@ -4,6 +4,7 @@ import os
 import pandas as pd
 
 from demoOrder import OrderClient
+from models import OrderType
 from observer_pattern import IEventListener
 
 
@@ -11,7 +12,7 @@ class Portfolio(IEventListener):
     def __init__(self):
         self.order_client = OrderClient()
         self.startfund = self.order_client.get_funds()
-
+        self.signal = None
 
     def __del__(self):
         pass
@@ -29,7 +30,12 @@ class Portfolio(IEventListener):
         #         f.write(f"Date : {datetime.date.today}\nLoss: {self.startfund - endfund}")
 
     def update(self, *args):
-        print(args)
+        if args != self.signal:
+            self.signal = args
+            response = self.order_client.placeOrder(
+                orderType=OrderType.mis_order, instrumentToken=self.signal[0], transactionType=self.signal[1], qty=1
+            )
+            print(response)
         return
 
 

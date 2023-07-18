@@ -3,6 +3,7 @@ from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from indicators import Indicator
 
 from livefeed import LiveFeed
 from models import *
@@ -15,7 +16,8 @@ from watchlist import Watchlist
 app = FastAPI()
 active_connections = set()
 portfolio = Portfolio()
-
+indicator = Indicator()
+indicator.attachObserver(portfolio)
 
 @app.get("/")
 def hello():
@@ -39,14 +41,14 @@ async def livefeed(websocket: WebSocket):
 @app.get("/subscribe")
 def subscribe():
     livefeed = LiveFeed()
-    livefeed.attachObserver(portfolio)
+    livefeed.attachObserver(indicator)
     return livefeed.subscribe()
 
 
 @app.get("/unsubscribe")
 def unsubscribe():
     livefeed = LiveFeed()
-    livefeed.detachObserver(portfolio)
+    livefeed.detachObserver(indicator)
     return livefeed.unsubscribe()
 
 
@@ -109,4 +111,4 @@ def get_watchlist():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8080)

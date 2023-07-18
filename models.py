@@ -2,8 +2,6 @@ import datetime
 from dataclasses import dataclass, field
 from enum import Enum
 
-DATASTORE = "financial_data.h5"
-
 
 class OrderType(Enum):
     normal_order = "N"

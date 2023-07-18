@@ -1,3 +1,0 @@
-runtime: python310 # or another supported version
-entrypoint: uvicorn app:app 
-instance_class: F2
