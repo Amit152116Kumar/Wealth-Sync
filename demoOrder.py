@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from models import OrderType, PositionType, QuoteType, TransactionType
+from models import IST, OrderType, PositionType, QuoteType, TransactionType
 from order_interface import IOrderClient
 from orderclient import get_quote
 
@@ -39,11 +39,15 @@ class OrderClient(IOrderClient):
         tag: str = "fno",
     ):
         if price == 0:
-            price = float(get_quote(instrumentToken, quote_type=QuoteType.ltp))
+            response = get_quote(instrumentToken, quote_type=QuoteType.ltp)
+            if type(response) == dict:
+                return response
+            else:
+                price = float(response)
 
         amount = qty * price
         orderinfo = {
-            "timestamp": datetime.datetime.now(),
+            "timestamp": datetime.datetime.now(IST),
             "orderType": orderType.value,
             "instrumentToken": instrumentToken,
             "transactionType": transactionType.value,
@@ -65,6 +69,8 @@ class OrderClient(IOrderClient):
                 self.open_positions.append(orderinfo)
 
         else:
+            if len(self.open_positions) == 0:
+                return {"status": "error", "message": "No Open Positions"}
             gst_amount = (amount * self.sebi_charges) + (amount * self.transaction_charges)
             gst_charges = gst_amount * self.gst
             total_charges = gst_amount + gst_charges + (amount * self.sell_stamp_duty)
@@ -75,6 +81,6 @@ class OrderClient(IOrderClient):
         self.orderbook.append(orderinfo)
 
         return {"status": "success", "message": orderinfo}
-    
-    def get_position(self, position_Type: PositionType ):
+
+    def get_position(self, position_Type: PositionType):
         return self.open_positions

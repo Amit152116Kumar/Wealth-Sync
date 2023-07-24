@@ -1,23 +1,31 @@
 import datetime
+import logging
+import sys
 import time
 from collections import defaultdict
+from threading import Thread
 
 import pandas as pd
 
-from firestore import db
-from indicators import Indicator
+from firestore import Firestore
 from kotakclient import KotakClient
+from models import IST
+from mylogger import logging_handler
 from observer_pattern import IEventListener, IEventManager
-from portfolio import Portfolio
+
+logging.basicConfig(level=logging.DEBUG, handlers=[logging_handler])
 
 
 class LiveFeed(IEventManager):
     dataList = defaultdict(list)
-    __broadcast_live = "https://wstreamer.kotaksecurities.com/feed"
     __columns = ["datetime", "open", "high", "low", "close", "volume", "OI"]
     __instance = None
+    Threads = []
+    count = 0
+    stockName = defaultdict(str)
+
     df_incomplete = defaultdict(pd.DataFrame)
-    df_notify = defaultdict(pd.DataFrame)
+    startTime = None
 
     def __new__(cls):
         if not cls.__instance:
@@ -26,6 +34,7 @@ class LiveFeed(IEventManager):
 
     def __init__(self) -> None:
         self._observers = set()
+        self.db = Firestore.db()
         self.watchlist = self.__get_watchlist()
 
     def __del__(self):
@@ -33,10 +42,10 @@ class LiveFeed(IEventManager):
 
     def __get_watchlist(self) -> list:
         watchlist = []
-        docs = db.collection("watchlist").get()
+        docs = self.db.collection("watchlist").get()
         for doc in docs:
             details = doc.to_dict()
-            details["documentName"] = doc.id
+            self.stockName[details["instrumentToken"]] = doc.id
             watchlist.append(details)
         df = pd.DataFrame(watchlist)
         return df
@@ -44,60 +53,51 @@ class LiveFeed(IEventManager):
     @property
     def get_tokens(self) -> str:
         tokens = self.watchlist["instrumentToken"].to_list()
-        for index, row in self.watchlist.iterrows():
-            data = row.drop(["documentName"]).to_dict()
-            db.collection("livefeed").document(row["documentName"]).set(data)
+        for _, row in self.watchlist.iterrows():
+            documentName = self.stockName[row["instrumentToken"]]
+            self.db.collection("livefeed").document(documentName).set(row.to_dict())
         return tokens.__str__().replace("[", "").replace("]", "").replace(" ", "")
 
-    def subscribe(self):
+    async def subscribe(self):
         self._client = KotakClient.get_client
-        time_now = datetime.datetime.now()
+        sys.stderr = logging_handler.stream
+
+        time_now = datetime.datetime.now(tz=IST)
         if time_now.strftime("%a") == ("Sun" or "Sat"):
-            print("Today is Weekend.")
             return {"status": "success", "message": "Today is Weekend."}
 
         holiday = pd.read_csv("kotak_data/holiday.csv", index_col="Date").index.to_list()
         if time_now.strftime("%d-%b-%Y") in holiday:
-            print("Today is Market Holiday.")
             return {"status": "success", "message": "Today is Market Holiday."}
 
         if time_now.hour < 9 or (time_now.hour == 9 and time_now.minute < 10):
-            print("Market will open at 9:15 AM.")
             return {"status": "success", "message": "Market will open at 9:15 AM."}
 
         if time_now.hour > 15 or (time_now.hour == 15 and time_now.minute > 30):
-            print("Market is Closed for Today.")
             return {"status": "success", "message": "Market is Closed for Today."}
-
-        print(
-            f"\tTime Now : {time_now.strftime('%H:%M:%S')} \
-            \n\tMarket will close at 3:30 PM. \n\tTime left : \
-                {datetime.timedelta(hours=15-time_now.hour,minutes=30-time_now.minute)}"
-        )
 
         # Subscribe to live feed
         try:
             self._client.subscribe(
                 self.get_tokens,
                 callback=self.callback_method,
-                broadcast_host=self.__broadcast_live,
+                broadcast_host="https://wstreamer.kotaksecurities.com/feed",
                 disconnect_event=self.disconnect_event,
                 connect_event=self.connect_event,
+                error_event=self.error_event,
             )
         except Exception as e:
             return {"status": "error", "message": f"{e}"}
-
-        print("Successfully Subscribed to Live feed 👍👍 \n")
-        return {"status": "success", "message": "Successfully Subscribed to Live feed 👍👍 \n"}
+        return {"status": "success", "message": "Successfully Subscribed to Live feed 👍"}
 
     def unsubscribe(self):
         try:
             self._client.unsubscribe()
         except Exception as e:
+            logging.debug(e)
             return {"status": "error", "message": f"{e}"}
-
-        print("Successfully Unsubscribed from Live feed 👍👍 \n")
-        return {"status": "success", "message": "Successfully Unsubscribed from Live feed 👍👍 \n"}
+        logging.debug("Successfully Unsubscribed from Live feed 👍")
+        return {"status": "success", "message": "Successfully Unsubscribed from Live feed 👍"}
 
     def attachObserver(self, observer: IEventListener):
         self._observers.add(observer)
@@ -109,47 +109,36 @@ class LiveFeed(IEventManager):
         return super().detachObserver(observer)
 
     def notifyObserver(self, *args):
+        logging.debug("livefeed -> notify Observers")
         for observer in self._observers:
             observer.update(*args)
         return super().notifyObserver()
 
     @classmethod
-    def updatedb(cls):
-        print("Disconnected from Live feed. Reconnecting...")
-        flag = False
-        watchlist = cls.__instance.watchlist
-        for token, data in cls.dataList.items():
-            df = pd.DataFrame(data, columns=cls.__columns)
-            df["datetime"] = pd.to_datetime(df["datetime"], format="%d/%m/%Y %H:%M:%S")
-            df = df.resample(f"1T", on="datetime").agg(
-                {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"}
-            )
-            df = pd.concat([cls.df_incomplete[token], df])
-            df = df.groupby(df.index).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
+    def updatedb(cls, token, data):
+        df = pd.DataFrame(data, columns=cls.__columns)
+        cls.dataList[token].clear()
+        df["datetime"] = pd.to_datetime(df["datetime"], format="%d/%m/%Y %H:%M:%S")
+        df = df.resample(f"1T", on="datetime").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
+        df = pd.concat([cls.df_incomplete[token], df])
+        df = df.groupby(df.index).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
 
-            completed_df = df[df.index < datetime.datetime.now() - datetime.timedelta(minutes=1)]
-            cls.df_incomplete[token] = df[df.index >= datetime.datetime.now() - datetime.timedelta(minutes=1)]
+        current_time = datetime.datetime.now(IST).replace(tzinfo=None)
+        completed_df = df[df.index < current_time - datetime.timedelta(minutes=1)]
+        cls.df_incomplete[token] = df[df.index >= current_time - datetime.timedelta(minutes=1)]
+        if completed_df.shape[0] == 0:
+            return
 
-            if completed_df.shape[0] == 0:
-                continue
-            year = completed_df.index[0].strftime("%Y")
-            data = completed_df.iloc[-1].to_dict()
-            stock = watchlist[watchlist["instrumentToken"] == token]["documentName"].values[0]
-            token_time = completed_df.index[-1].strftime("%Y-%m-%d %H:%M:%S")
-            db.collection("livefeed").document(stock).collection(year).document(token_time).set(data)
-
-            cls.df_notify[token] = pd.concat([cls.df_notify[token], completed_df])
-            flag = True
-
-        cls.dataList.clear()
-        if flag:
-            cls.__instance.notifyObserver(cls.df_notify)
-            cls.df_notify.clear()
+        data = completed_df.iloc[-1].to_dict()
+        token_time = completed_df.index[-1].strftime("%Y-%m-%d %H:%M:%S")
+        cls.__instance.db.collection("livefeed").document(cls.__instance.stockName[token]).collection("ohlcv").document(token_time).set(data)
+        cls.__instance.notifyObserver(token, completed_df)
         return
 
     # Callback method to receive live feed
     @staticmethod
     def callback_method(message):
+        LiveFeed.count += 1
         token = int(message[1])
         ltp = float(message[6])
         total_qty = message[15]
@@ -161,37 +150,30 @@ class LiveFeed(IEventManager):
 
     @staticmethod
     def disconnect_event():
-        start = time.perf_counter()
-        LiveFeed.updatedb()
-        print(f"Time taken to write data is {time.perf_counter() - start} seconds")
+        logging.debug("Disconnected from Live feed. Reconnecting...")
+        LiveFeed.startTime = time.perf_counter()
+        logging.debug(f"count :  {LiveFeed.count}")
+        LiveFeed.count = 0
+        for thread in LiveFeed.Threads:
+            thread.join()
+            logging.debug(f"Thread-{thread.getName} joined")
+        LiveFeed.Threads.clear()
+
+        for token, data in LiveFeed.dataList.items():
+            thread = Thread(target=LiveFeed.updatedb, args=(token, data))
+            logging.debug(f"Thread-{thread.getName} created for token : {token}")
+            LiveFeed.Threads.append(thread)
+            thread.start()
+
         return
 
     @staticmethod
     def connect_event():
-        pass
+        if LiveFeed.startTime is not None:
+            logging.debug(f"Connected to Live feed.\tTime taken to reconnect : {time.perf_counter() - LiveFeed.startTime}")
+        return
 
-
-if __name__ == "__main__":
-    # while True:
-    #     time_now = datetime.datetime.now()
-    #     print(f"Time Now : {time_now.strftime('%H:%M:%S')}")
-    #     if time_now.hour == 9 and time_now.minute >= 10:
-    #         break
-    #     time.sleep(300)
-    livefeed = LiveFeed()
-    indicator = Indicator()
-
-    # counter = 0
-    # while True:
-    #     livefeed.connect_event()
-    #     price = random.randint(18000, 19000)
-    #     data = ("NIFTY", 11721, 0, 0, 0, 0, price, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, datetime.datetime.now())
-    #     time.sleep(1)
-    #     livefeed.callback_method(data)
-    #     counter += 1
-    #     if counter == 27:
-    #         start = time.perf_counter()
-    #         livefeed.disconnect_event()
-    #         print("--------------------")
-    #         counter = 0
-    #         time.sleep(3)
+    @staticmethod
+    def error_event(data):
+        logging.error("Error in Live feed : {}".format(data))
+        return

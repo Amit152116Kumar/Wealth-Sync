@@ -356,7 +356,7 @@ class KSTradeApi():
         return new_array
 
 
-    def subscribe(self, input_tokens, callback,connect_event, disconnect_event, broadcast_host=broadcast_host):
+    def subscribe(self, input_tokens, callback,connect_event,error_event, disconnect_event, broadcast_host=broadcast_host):
         try:
             if self.consumer_secret == None or not self.consumer_secret:
                 raise ApiValueError("Please provide the consumer_secret paramater while creating KSTradeApi object or supply in settings file.")
@@ -389,29 +389,9 @@ class KSTradeApi():
                 parsed_broadcast_host = urllib.parse.urlparse(broadcast_host)
                 socketio_path = parsed_broadcast_host.path
                 
-                date_now = datetime.date.today().strftime("%d%m%y")
-                # Set up a logging handler that writes logs to a file
-                logging_handler = logging.FileHandler(f'logs/socketio_{date_now}.log')
-                logging_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
-                logging_handler.setLevel(logging.DEBUG)
-
-                # Set up the logging configuration for the socketio 
-
-                socketio_logger = logging.getLogger('socketio')     
-                socketio_logger.addHandler(logging_handler)
-                socketio_logger.setLevel(logging.DEBUG)
-
-                # Set up the logging configuration for the engineio 
-
-                engineio_logger = logging.getLogger('engineio')     
-                engineio_logger.addHandler(logging_handler)
-                engineio_logger.setLevel(logging.DEBUG)
-
-                # Redirect stderr to the logging handler too, so that all error messages are logged
-                sys.stderr = logging_handler.stream
                 self.sio = socketio.Client(
                     reconnection=True, request_timeout=30, reconnection_attempts=5, engineio_logger=True,
-                            logger=True,http_session=session, ssl_verify=session.verify)
+                            logger=False,http_session=session, ssl_verify=session.verify)
 
                 @self.sio.event
                 def connect():
@@ -420,8 +400,7 @@ class KSTradeApi():
 
                 @self.sio.event
                 def connect_error(data):
-                    disconnect_event()
-
+                    error_event(data)
                 @self.sio.event
                 def disconnect():
                     disconnect_event()

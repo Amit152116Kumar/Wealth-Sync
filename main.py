@@ -3,11 +3,12 @@ from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
-from indicators import Indicator
 
+from indicators import Indicator
+from kotakclient import KotakClient
 from livefeed import LiveFeed
 from models import *
-from orderclient import OrderClient
+from orderclient import OrderClient, get_quote
 from portfolio import Portfolio
 from watchlist import Watchlist
 
@@ -15,9 +16,26 @@ from watchlist import Watchlist
 
 app = FastAPI()
 active_connections = set()
-portfolio = Portfolio()
-indicator = Indicator()
-indicator.attachObserver(portfolio)
+subscribed_flag = False
+livefeed = LiveFeed()
+
+@app.on_event("startup")
+def startup_event():
+    global portfolio, indicator
+    KotakClient.get_client
+    portfolio = Portfolio()
+    indicator = Indicator()
+    indicator.attachObserver(portfolio)
+    livefeed.attachObserver(indicator)
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    if subscribed_flag:
+        livefeed.unsubscribe()
+    livefeed.detachObserver(indicator)
+    indicator.detachObserver(portfolio)
+
 
 @app.get("/")
 def hello():
@@ -25,31 +43,37 @@ def hello():
 
 
 @app.websocket("/livefeed")
-async def livefeed(websocket: WebSocket):
+async def get_livefeed(websocket: WebSocket):
     await websocket.accept()
     active_connections.add(websocket)
     try:
         while True:
-            data = LiveFeed.dataList
+            data = LiveFeed.df_notify
             for connection in active_connections:
                 await connection.send_json(data)
-            await asyncio.sleep(1)
+            await asyncio.sleep(30)
     except WebSocketDisconnect:
         active_connections.remove(websocket)
 
 
 @app.get("/subscribe")
-def subscribe():
-    livefeed = LiveFeed()
-    livefeed.attachObserver(indicator)
-    return livefeed.subscribe()
+async def subscribe():
+    global subscribed_flag
+    if subscribed_flag:
+        return {"status":"success", "message":"Already Subscribed"}
+    result = await livefeed.subscribe()
+    if result["status"] == "success":
+        subscribed_flag = True
+    return result
 
 
 @app.get("/unsubscribe")
-def unsubscribe():
-    livefeed = LiveFeed()
-    livefeed.detachObserver(indicator)
-    return livefeed.unsubscribe()
+async def unsubscribe():
+    global subscribed_flag
+    result = livefeed.unsubscribe()
+    if result["status"] == "success":
+        subscribed_flag = False
+    return result
 
 
 @app.get("/orders")
@@ -82,7 +106,7 @@ def get_margin(
 
 
 @app.get("/quote/{quote_type}")
-def get_quote(quote_type: str, token: str = Query(..., min_length=1, max_length=6, title="Instrument Token")):
+def get_Quote(quote_type: str, token: str = Query(..., min_length=1, max_length=6, title="Instrument Token")):
     quoteType = None
     if quote_type == "ltp":
         quoteType = QuoteType.ltp
@@ -90,7 +114,7 @@ def get_quote(quote_type: str, token: str = Query(..., min_length=1, max_length=
         quoteType = QuoteType.depth
     else:
         quoteType = QuoteType.ohlc
-    return OrderClient().get_quote(quoteType, token)
+    return get_quote(quoteType, token)
 
 
 @app.get("/position/{position_type}")

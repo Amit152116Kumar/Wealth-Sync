@@ -59,7 +59,6 @@ class KotakClient:
 
         # Get session for 2FA authentication if doesn't exist then fetch
         # access code from mail and login
-        time.sleep(5)
         access_code = self.__fetch_access_code()
         while True:
             try:

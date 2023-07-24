@@ -2,6 +2,10 @@ import datetime
 from dataclasses import dataclass, field
 from enum import Enum
 
+import pytz
+
+IST = pytz.timezone("Asia/Kolkata")
+
 
 class OrderType(Enum):
     normal_order = "N"
@@ -47,10 +51,10 @@ class OrderValidity(Enum):
 
 
 def upcoming_expiry() -> str:
-    today = datetime.datetime.today()
+    today = datetime.datetime.now(IST).date()
     days_until_thursday = (3 - today.weekday()) % 7
     next_thursday = today + datetime.timedelta(days=days_until_thursday)
-    return next_thursday.strftime("%d%b%y")
+    return next_thursday.strftime("%d%b%y").upper()
 
 
 @dataclass(
@@ -273,3 +277,14 @@ class FundsResponse:
 @dataclass(frozen=True, order=True)
 class Positions:
     Success: list[_PositionTodayParams]
+
+
+@dataclass(frozen=True, order=True)
+class Strategy:
+    rsi: int
+    sma: int
+    fast_multiplier: int
+    fast_period: int
+    slow_multiplier: int
+    slow_period: int
+    timeframe: int

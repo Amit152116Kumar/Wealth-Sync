@@ -1,7 +1,7 @@
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from firestore import db
+from firestore import Firestore
 from main import app
 
 client = TestClient(app)
@@ -38,4 +38,4 @@ def test_funds():
 
 
 def test_firestore():
-    assert db is not None
+    assert Firestore.db() is not None

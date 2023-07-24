@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
-from firestore import db
+from firestore import Firestore
 
 DATASTORE = "kotak_data/tokens.hdf5"
 
@@ -15,6 +15,7 @@ class Watchlist:
         self._access_token = os.getenv("access_token")
         self._consumer_key = os.getenv("consumer_key")
         self._host = os.getenv("host")
+        self.db = Firestore.db()
         # self.__fetch_tokens()
 
     def __fetch_tokens(self):
@@ -101,7 +102,7 @@ class Watchlist:
             # Update watchlist
             for index, row in token_list.iterrows():
                 stockName = row["exchange"] + "_" + row["instrumentName"]
-                db.collection("watchlist").document(stockName).set(row.to_dict())
+                self.db.collection("watchlist").document(stockName).set(row.to_dict())
             return {"status": "success", "message": "Watchlist Updated 👍👍"}
 
         return
