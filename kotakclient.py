@@ -55,23 +55,21 @@ class KotakClient:
 
         # Get session for user
         login_response = client.login(password=password)
-        print(f"\n{login_response['Success']['message']}")  # type: ignore
+        message = login_response["Success"]["message"]  # type: ignore
+        if message == "Your access code is generated successfully.":
+            print("Waiting for 2FA authentication...")
+            time.sleep(5)
 
         # Get session for 2FA authentication if doesn't exist then fetch
         # access code from mail and login
         access_code = self.__fetch_access_code()
-        while True:
-            try:
-                response = client.session_2fa(access_code=access_code)
-                print(f"Welcome {response['clientName']} ({response['clientCode']})  😊😊 \n")  # type: ignore
-                order_type = response["apiToken"]["productMarking"]  # type: ignore
-                break
-            except Exception as e:
-                print("Error in Login : ", e)
-                time.sleep(10)
-                access_code = self.__fetch_access_code()
 
-        # Client instance
+        try:
+            response = client.session_2fa(access_code=access_code)
+
+        except Exception as e:
+            print("Error in Login : ", e)
+
         return client
 
     @staticmethod
