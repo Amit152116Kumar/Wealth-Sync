@@ -32,3 +32,17 @@
 **/values.dev.yaml
 LICENSE
 README.md
+**/csv
+**/.txt
+**/.log
+__pycache__/
+**/.h5
+**/.hdf5
+**/.env
+**/.json
+!vercel.json
+!requirements.txt
+!holiday.csv
+read.py
+/src
+!tokens.hdf5

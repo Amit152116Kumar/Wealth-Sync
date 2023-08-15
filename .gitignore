@@ -11,5 +11,4 @@ __pycache__/
 !holiday.csv
 read.py
 /src
-FIRESTORE_KEY
 !tokens.hdf5
