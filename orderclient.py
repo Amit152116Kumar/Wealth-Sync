@@ -96,8 +96,7 @@ class OrderClient(IOrderClient):
 # Get Quote for given token ID
 def get_quote(instrumentToken: str, quote_type: QuoteType):
     try:
-        _client = KotakClient.get_client
-        quote = _client.quote(instrumentToken, quote_type.value)["success"]  # type: ignore
+        quote = KotakClient.get_client.quote(instrumentToken, quote_type.value)["success"]  # type: ignore
     except Exception as e:
         return {"status": "error", "message": str(e)}
     if quote_type == QuoteType.ltp:

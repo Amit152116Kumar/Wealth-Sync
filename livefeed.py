@@ -59,7 +59,6 @@ class LiveFeed(IEventManager):
         return tokens.__str__().replace("[", "").replace("]", "").replace(" ", "")
 
     async def subscribe(self):
-        self._client = KotakClient.get_client
         sys.stderr = logging_handler.stream
 
         time_now = datetime.datetime.now(tz=IST)
@@ -78,7 +77,7 @@ class LiveFeed(IEventManager):
 
         # Subscribe to live feed
         try:
-            self._client.subscribe(
+            KotakClient.get_client.subscribe(
                 self.get_tokens,
                 callback=self.callback_method,
                 broadcast_host="https://wstreamer.kotaksecurities.com/feed",
@@ -92,7 +91,7 @@ class LiveFeed(IEventManager):
 
     def unsubscribe(self):
         try:
-            self._client.unsubscribe()
+            KotakClient.get_client.unsubscribe()
         except Exception as e:
             logging.debug(e)
             return {"status": "error", "message": f"{e}"}

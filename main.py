@@ -22,7 +22,6 @@ livefeed = LiveFeed()
 @app.on_event("startup")
 def startup_event():
     global portfolio, indicator
-    KotakClient.get_client
     portfolio = Portfolio()
     indicator = Indicator()
     indicator.attachObserver(portfolio)
@@ -135,4 +134,4 @@ def get_watchlist():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -12,3 +12,5 @@ __pycache__/
 read.py
 /src
 !tokens.hdf5
+build
+*.c
