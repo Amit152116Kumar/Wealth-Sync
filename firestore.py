@@ -34,7 +34,7 @@ class Firestore:
 
     @classmethod
     def add_strategy(cls, token: int, strategy: dict):
-        db = Firestore.db()
+        db = cls.db()
         df = pd.read_hdf(
             "kotak_data/tokens.hdf5",
             key="cashTokens",
@@ -48,6 +48,68 @@ class Firestore:
             "strategy"
         ).document().set(strategy)
         return {"status": "success", "message": "Strategy added successfully."}
+
+    @classmethod
+    def get_strategy(cls, documentName: str):
+        db = cls.db()
+        strategy = (
+            db.collection("watchlist")
+            .document(documentName)
+            .collection("strategy")
+            .get()[0]
+        )
+        return strategy
+
+    @classmethod
+    def add_watchlist(cls, documentName: str, info: dict):
+        db = cls.db()
+        db.collection("watchlist").document(documentName).set(info)
+        return {
+            "status": "success",
+            "message": "Watchlist added successfully.",
+        }
+
+    @classmethod
+    def get_watchlist(cls):
+        db = cls.db()
+        docs = db.collection("watchlist").stream()
+        return docs
+
+    @classmethod
+    def add_ohlcv(cls, documentName: str, id: str, info: dict):
+        db = cls.db()
+        docs = (
+            db.collection("livefeed")
+            .document(documentName)
+            .collection("ohlcv")
+            .document(id)
+            .set(info)
+        )
+        return docs
+
+    @classmethod
+    def get_ohlcv(cls, documentName: str, size: int):
+        db = cls.db()
+        docs = (
+            db.collection("livefeed")
+            .document(documentName)
+            .collection("ohlcv")
+            .limit(size)
+            .stream()
+        )
+        return docs
+
+    @classmethod
+    def add_livefeed_info(cls, documentName: str, info: dict):
+        db = cls.db()
+        docs = db.collection("livefeed").document(documentName).set(info)
+        return docs
+
+    @classmethod
+    def get_livefeed_info(cls, documentName: str):
+        db = cls.db()
+        docs = db.collection("livefeed").document(documentName).get()
+        return docs
 
 
 if __name__ == "__main__":

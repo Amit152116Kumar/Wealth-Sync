@@ -17,27 +17,25 @@ logging.basicConfig(level=logging.DEBUG, handlers=[logging_handler])
 
 
 class Indicator(IEventManager, IEventListener):
-    df_incomplete = defaultdict(pd.DataFrame)
-
     def __init__(self):
         self._observers = set()
-        self.df_complete = defaultdict(pd.DataFrame)
         self.strategy = defaultdict(dict)
         self.window = defaultdict(int)
         self.timeframe = defaultdict(int)
-        self.db = Firestore.db()
-        docs = self.db.collection("watchlist").stream()
+        self.stockName = defaultdict(str)
+
+        self.df_complete = defaultdict(pd.DataFrame)
+        self.df_incomplete = defaultdict(pd.DataFrame)
+        self.df_incomplete_1 = defaultdict(pd.DataFrame)
+
+        docs = Firestore.get_watchlist()
 
         for doc in docs:
             id = doc.id
             token = doc.get("instrumentToken")
+            self.stockName[token] = id
             try:
-                strategy = (
-                    self.db.collection("watchlist")
-                    .document(id)
-                    .collection("strategy")
-                    .get()[0]
-                )
+                strategy = Firestore.get_strategy(id)
 
                 self.timeframe[token] = strategy.get("timeframe")
                 data_dict = strategy.to_dict()
@@ -49,13 +47,8 @@ class Indicator(IEventManager, IEventListener):
                 self.window[token] = max(data_dict.values()) + 2
 
                 df = []
-                livefeed_ref = (
-                    self.db.collection("livefeed")
-                    .document(id)
-                    .collection("ohlcv")
-                )
                 size = self.window[token] * self.timeframe[token]
-                livefeed_stream = livefeed_ref.limit(size).stream()
+                livefeed_stream = Firestore.get_ohlcv(id, size)
 
                 for livefeed in livefeed_stream:
                     dict_data = livefeed.to_dict()
@@ -195,9 +188,37 @@ class Indicator(IEventManager, IEventListener):
     def update(self, *args):
         token = args[0]
         df: pd.DataFrame = args[1]
-        if self.timeframe[token] == 0:
+        self.updatedb(token, df)
+        return
+
+    def updatedb(self, token, df):
+        df = pd.concat([self.df_incomplete_1[token], df])
+        df = df.groupby(df.index).agg(
+            {
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+                "volume": "last",
+                "OI": "last",
+            }
+        )
+
+        current_time = datetime.datetime.now(IST).replace(tzinfo=None)
+        completed_df = df[
+            df.index < current_time - datetime.timedelta(minutes=1)
+        ]
+        self.df_incomplete_1[token] = df[
+            df.index >= current_time - datetime.timedelta(minutes=1)
+        ]
+        if completed_df.shape[0] == 0:
             return
-        self.data_handler(token, df)
+        data = completed_df.iloc[-1].to_dict()
+        token_time = completed_df.index[-1].strftime("%Y-%m-%d %H:%M:%S")
+
+        Firestore.add_ohlcv(self.stockName[token], token_time, data)
+        self.data_handler(token, completed_df)
+
         return
 
     def SMA(self, data: pd.DataFrame, period: int = 20):

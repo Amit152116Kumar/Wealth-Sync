@@ -34,7 +34,6 @@ class LiveFeed(IEventManager):
 
     def __init__(self) -> None:
         self._observers = set()
-        self.db = Firestore.db()
         self.watchlist = self.__get_watchlist()
 
     def __del__(self):
@@ -42,7 +41,7 @@ class LiveFeed(IEventManager):
 
     def __get_watchlist(self) -> list:
         watchlist = []
-        docs = self.db.collection("watchlist").get()
+        docs = Firestore.get_watchlist()
         for doc in docs:
             details = doc.to_dict()
             self.stockName[details["instrumentToken"]] = doc.id
@@ -55,9 +54,7 @@ class LiveFeed(IEventManager):
         tokens = self.watchlist["instrumentToken"].to_list()
         for _, row in self.watchlist.iterrows():
             documentName = self.stockName[row["instrumentToken"]]
-            self.db.collection("livefeed").document(documentName).set(
-                row.to_dict()
-            )
+            Firestore.add_livefeed_info(documentName, row.to_dict())
         return (
             tokens.__str__().replace("[", "").replace("]", "").replace(" ", "")
         )
@@ -133,53 +130,6 @@ class LiveFeed(IEventManager):
             observer.update(*args)
         return super().notifyObserver()
 
-    @classmethod
-    def updatedb(cls, token, data):
-        df = pd.DataFrame(data, columns=cls.__columns)
-        cls.dataList[token].clear()
-        df["datetime"] = pd.to_datetime(
-            df["datetime"], format="%d/%m/%Y %H:%M:%S"
-        )
-        df = df.resample(f"1T", on="datetime").agg(
-            {
-                "open": "first",
-                "high": "max",
-                "low": "min",
-                "close": "last",
-                "volume": "last",
-                "OI": "last",
-            }
-        )
-        df = pd.concat([cls.df_incomplete[token], df])
-        df = df.groupby(df.index).agg(
-            {
-                "open": "first",
-                "high": "max",
-                "low": "min",
-                "close": "last",
-                "volume": "last",
-                "OI": "last",
-            }
-        )
-
-        current_time = datetime.datetime.now(IST).replace(tzinfo=None)
-        completed_df = df[
-            df.index < current_time - datetime.timedelta(minutes=1)
-        ]
-        cls.df_incomplete[token] = df[
-            df.index >= current_time - datetime.timedelta(minutes=1)
-        ]
-        if completed_df.shape[0] == 0:
-            return
-
-        data = completed_df.iloc[-1].to_dict()
-        token_time = completed_df.index[-1].strftime("%Y-%m-%d %H:%M:%S")
-        cls.__instance.db.collection("livefeed").document(
-            cls.__instance.stockName[token]
-        ).collection("ohlcv").document(token_time).set(data)
-        cls.__instance.notifyObserver(token, completed_df)
-        return
-
     # Callback method to receive live feed
     @staticmethod
     def callback_method(message):
@@ -205,12 +155,29 @@ class LiveFeed(IEventManager):
         LiveFeed.Threads.clear()
 
         for token, data in LiveFeed.dataList.items():
-            thread = Thread(target=LiveFeed.updatedb, args=(token, data))
+            df = pd.DataFrame(data, columns=LiveFeed.__columns)
+            df["datetime"] = pd.to_datetime(
+                df["datetime"], format="%d/%m/%Y %H:%M:%S"
+            )
+            df = df.resample(f"1T", on="datetime").agg(
+                {
+                    "open": "first",
+                    "high": "max",
+                    "low": "min",
+                    "close": "last",
+                    "volume": "last",
+                    "OI": "last",
+                }
+            )
+            thread = Thread(
+                target=LiveFeed.__instance.notifyObserver, args=(token, df)
+            )
             logging.debug(
                 f"Thread-{thread.getName} created for token : {token}"
             )
             LiveFeed.Threads.append(thread)
             thread.start()
+        LiveFeed.dataList.clear()
 
         return
 

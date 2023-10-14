@@ -1,3 +1,6 @@
+__version__ = "1.0"
+__author__ = "Amit Kumar"
+
 import asyncio
 from typing import Optional
 
@@ -27,6 +30,7 @@ def startup_event():
     indicator = Indicator()
     indicator.attachObserver(portfolio)
     livefeed.attachObserver(indicator)
+    livefeed.attachObserver(portfolio)
 
 
 @app.on_event("shutdown")
@@ -68,7 +72,7 @@ async def subscribe():
 
 
 @app.get("/unsubscribe")
-async def unsubscribe():
+def unsubscribe():
     global subscribed_flag
     result = livefeed.unsubscribe()
     if result["status"] == "success":
@@ -140,9 +144,9 @@ def get_Open_position(position_type: str):
     return OrderClient().get_position(positionType)
 
 
-@app.get("/watchlist")
-def get_watchlist():
-    return Watchlist().get_watchlist()
+@app.get("/fetchTokens")
+def get_tokens():
+    return Watchlist().fetch_tokens()
 
 
 if __name__ == "__main__":
