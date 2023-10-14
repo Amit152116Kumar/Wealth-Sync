@@ -74,10 +74,14 @@ class OrderClient(IOrderClient):
         return FundsResponse(**response)
 
     # Get Required Margin for Order to be placed
-    def get_required_margin(self, transactionType: TransactionType, order_info: OrderParams):
+    def get_required_margin(
+        self, transactionType: TransactionType, order_info: OrderParams
+    ):
         order_info = [order.__dict__() for order in order_info]
         try:
-            margin = self._client.margin_required(transaction_type=transactionType.value, order_info=order_info)
+            margin = self._client.margin_required(
+                transaction_type=transactionType.value, order_info=order_info
+            )
         except Exception as e:
             return {"status": "error", "message": str(e)}
         return MarginReqResponse(**margin).Success  # type: ignore

@@ -32,7 +32,12 @@ class Indicator(IEventManager, IEventListener):
             id = doc.id
             token = doc.get("instrumentToken")
             try:
-                strategy = self.db.collection("watchlist").document(id).collection("strategy").get()[0]
+                strategy = (
+                    self.db.collection("watchlist")
+                    .document(id)
+                    .collection("strategy")
+                    .get()[0]
+                )
 
                 self.timeframe[token] = strategy.get("timeframe")
                 data_dict = strategy.to_dict()
@@ -44,7 +49,11 @@ class Indicator(IEventManager, IEventListener):
                 self.window[token] = max(data_dict.values()) + 2
 
                 df = []
-                livefeed_ref = self.db.collection("livefeed").document(id).collection("ohlcv")
+                livefeed_ref = (
+                    self.db.collection("livefeed")
+                    .document(id)
+                    .collection("ohlcv")
+                )
                 size = self.window[token] * self.timeframe[token]
                 livefeed_stream = livefeed_ref.limit(size).stream()
 
@@ -56,11 +65,22 @@ class Indicator(IEventManager, IEventListener):
                 df["datetime"] = pd.to_datetime(df["datetime"])
                 df = (
                     df.resample(f"{self.timeframe[token]}T", on="datetime")
-                    .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                            "volume": "last",
+                            "OI": "last",
+                        }
+                    )
                     .dropna()
                 )
                 self.df_complete[token] = df.tail(self.window[token])
-                logging.debug(f"Initial Shape of the token {token, self.df_complete[token].shape}")
+                logging.debug(
+                    f"Initial Shape of the token {token, self.df_complete[token].shape}"
+                )
             except Exception as e:
                 logging.error(f"Error in Indicator init: {e}")
 
@@ -82,39 +102,87 @@ class Indicator(IEventManager, IEventListener):
         TIMEFRAME = self.timeframe[token]
         STRATEGY = self.strategy[token]
         WINDOW = self.window[token]
-        df = df.resample(f"{TIMEFRAME}T").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
+        df = df.resample(f"{TIMEFRAME}T").agg(
+            {
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+                "volume": "last",
+                "OI": "last",
+            }
+        )
 
         df = pd.concat([self.df_incomplete[token], df])
-        df = df.groupby(df.index).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
+        df = df.groupby(df.index).agg(
+            {
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+                "volume": "last",
+                "OI": "last",
+            }
+        )
 
         current_time = datetime.datetime.now(IST).replace(tzinfo=None)
-        completed_df = df[df.index < current_time - datetime.timedelta(minutes=TIMEFRAME)]
-        self.df_incomplete[token] = df[df.index >= current_time - datetime.timedelta(minutes=TIMEFRAME)]
+        completed_df = df[
+            df.index < current_time - datetime.timedelta(minutes=TIMEFRAME)
+        ]
+        self.df_incomplete[token] = df[
+            df.index >= current_time - datetime.timedelta(minutes=TIMEFRAME)
+        ]
 
         if completed_df.shape[0] == 0:
             return
 
-        self.df_complete[token] = pd.concat([self.df_complete[token], completed_df])
+        self.df_complete[token] = pd.concat(
+            [self.df_complete[token], completed_df]
+        )
         if self.df_complete[token].shape[0] == WINDOW + 1:
-            self.df_complete[token].drop(self.df_complete[token].index[:1], inplace=True)
+            self.df_complete[token].drop(
+                self.df_complete[token].index[:1], inplace=True
+            )
 
         if self.df_complete[token].shape[0] < WINDOW:
             return
 
         sma = self.SMA(self.df_complete[token], STRATEGY["sma"]).values
         rsi = self.RSI(self.df_complete[token], STRATEGY["rsi"]).values
-        (fast_trend, fast_direction) = self.SUPERTREND(self.df_complete[token], STRATEGY["fast_period"], STRATEGY["fast_multiplier"])
-        (slow_trend, slow_direction) = self.SUPERTREND(self.df_complete[token], STRATEGY["slow_period"], STRATEGY["slow_multiplier"])
+        (fast_trend, fast_direction) = self.SUPERTREND(
+            self.df_complete[token],
+            STRATEGY["fast_period"],
+            STRATEGY["fast_multiplier"],
+        )
+        (slow_trend, slow_direction) = self.SUPERTREND(
+            self.df_complete[token],
+            STRATEGY["slow_period"],
+            STRATEGY["slow_multiplier"],
+        )
 
         logging.debug(
             f"token: {token}, sma: {sma[-1]}, rsi: {rsi[-1]}, fast_trend: {fast_trend[-1]}, slow_trend: {slow_trend[-1]}, fast_direction: {fast_direction[-1]}, slow_direction: {slow_direction[-1]}"
         )
 
-        if sma[-1] and rsi[-1] and fast_trend[-1] and slow_trend[-1] and fast_direction[-1] and slow_direction[-1]:
+        if (
+            sma[-1]
+            and rsi[-1]
+            and fast_trend[-1]
+            and slow_trend[-1]
+            and fast_direction[-1]
+            and slow_direction[-1]
+        ):
             self.notifyObserver(token, TransactionType.buy, OptionType.call)
             logging.debug(f"token: {token} BUY call")
 
-        elif not sma[-1] and not rsi[-1] and not fast_trend[-1] and not slow_trend[-1] and not fast_direction[-1] and not slow_direction[-1]:
+        elif (
+            not sma[-1]
+            and not rsi[-1]
+            and not fast_trend[-1]
+            and not slow_trend[-1]
+            and not fast_direction[-1]
+            and not slow_direction[-1]
+        ):
             self.notifyObserver(token, TransactionType.buy, OptionType.put)
             logging.debug(f"token: {token} BUY put")
 
@@ -140,7 +208,9 @@ class Indicator(IEventManager, IEventListener):
         data = data.tail(period + 1)
         return ta.rsi(data["close"], timeperiod=period) >= 50
 
-    def SUPERTREND(self, data: pd.DataFrame, period: int = 7, multiplier: int = 3):
+    def SUPERTREND(
+        self, data: pd.DataFrame, period: int = 7, multiplier: int = 3
+    ):
         data = data.tail(period + 1)
         high = data["high"]
         low = data["low"]
@@ -151,7 +221,9 @@ class Indicator(IEventManager, IEventListener):
         matr = multiplier * atr
         upper = avg_price + matr
         lower = avg_price - matr
-        trend, direction = _get_final_bands_nb(close.values, upper.values, lower.values)
+        trend, direction = _get_final_bands_nb(
+            close.values, upper.values, lower.values
+        )
         return trend, direction == 1
 
 

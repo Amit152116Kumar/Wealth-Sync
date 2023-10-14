@@ -19,6 +19,7 @@ active_connections = set()
 subscribed_flag = False
 livefeed = LiveFeed()
 
+
 @app.on_event("startup")
 def startup_event():
     global portfolio, indicator
@@ -59,7 +60,7 @@ async def get_livefeed(websocket: WebSocket):
 async def subscribe():
     global subscribed_flag
     if subscribed_flag:
-        return {"status":"success", "message":"Already Subscribed"}
+        return {"status": "success", "message": "Already Subscribed"}
     result = await livefeed.subscribe()
     if result["status"] == "success":
         subscribed_flag = True
@@ -92,8 +93,12 @@ def get_funds():
 
 @app.get("/margin")
 def get_margin(
-    type: str = Query(..., min_length=1, max_length=6, title="Transaction Type"),
-    token: str = Query(..., min_length=1, max_length=6, title="Instrument Token"),
+    type: str = Query(
+        ..., min_length=1, max_length=6, title="Transaction Type"
+    ),
+    token: str = Query(
+        ..., min_length=1, max_length=6, title="Instrument Token"
+    ),
     quantity: Optional[int] = Query(1, title="Quantity"),
     price: Optional[float] = Query(0, title="Price"),
 ):
@@ -101,11 +106,18 @@ def get_margin(
         transactionType = TransactionType.buy
     else:
         transactionType = TransactionType.sell
-    return OrderClient().get_required_margin(transactionType, [OrderParams(token, quantity, price)])
+    return OrderClient().get_required_margin(
+        transactionType, [OrderParams(token, quantity, price)]
+    )
 
 
 @app.get("/quote/{quote_type}")
-def get_Quote(quote_type: str, token: str = Query(..., min_length=1, max_length=6, title="Instrument Token")):
+def get_Quote(
+    quote_type: str,
+    token: str = Query(
+        ..., min_length=1, max_length=6, title="Instrument Token"
+    ),
+):
     quoteType = None
     if quote_type == "ltp":
         quoteType = QuoteType.ltp

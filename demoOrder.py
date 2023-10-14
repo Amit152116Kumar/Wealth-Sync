@@ -58,9 +58,13 @@ class OrderClient(IOrderClient):
         }
 
         if transactionType == TransactionType.buy:
-            gst_amount = (amount * self.sebi_charges) + (amount * self.transaction_charges)
+            gst_amount = (amount * self.sebi_charges) + (
+                amount * self.transaction_charges
+            )
             gst_charges = gst_amount * self.gst
-            total_charges = gst_amount + gst_charges + (amount * self.buy_stamp_charges)
+            total_charges = (
+                gst_amount + gst_charges + (amount * self.buy_stamp_charges)
+            )
             if amount > self.funds:
                 return {"status": "error", "message": "Insufficient Funds"}
             else:
@@ -71,9 +75,13 @@ class OrderClient(IOrderClient):
         else:
             if len(self.open_positions) == 0:
                 return {"status": "error", "message": "No Open Positions"}
-            gst_amount = (amount * self.sebi_charges) + (amount * self.transaction_charges)
+            gst_amount = (amount * self.sebi_charges) + (
+                amount * self.transaction_charges
+            )
             gst_charges = gst_amount * self.gst
-            total_charges = gst_amount + gst_charges + (amount * self.sell_stamp_duty)
+            total_charges = (
+                gst_amount + gst_charges + (amount * self.sell_stamp_duty)
+            )
             orderinfo["total_charges"] = total_charges
             self.funds += amount - total_charges
             self.open_positions.pop()

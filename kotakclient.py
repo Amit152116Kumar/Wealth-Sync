@@ -79,7 +79,9 @@ class KotakClient:
         mail = IMAP4_SSL("imap.gmail.com")
         mail.login(username, password)  # type: ignore
         mail.select("inbox")
-        _, messages = mail.search(None, f'FROM "accesscode@kotaksecurities.com"')
+        _, messages = mail.search(
+            None, f'FROM "accesscode@kotaksecurities.com"'
+        )
         msg_id = messages[0].split(b" ")[-1]
 
         _, message = mail.fetch(msg_id, "(RFC822)")

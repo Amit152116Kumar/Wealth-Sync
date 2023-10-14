@@ -55,25 +55,39 @@ class LiveFeed(IEventManager):
         tokens = self.watchlist["instrumentToken"].to_list()
         for _, row in self.watchlist.iterrows():
             documentName = self.stockName[row["instrumentToken"]]
-            self.db.collection("livefeed").document(documentName).set(row.to_dict())
-        return tokens.__str__().replace("[", "").replace("]", "").replace(" ", "")
+            self.db.collection("livefeed").document(documentName).set(
+                row.to_dict()
+            )
+        return (
+            tokens.__str__().replace("[", "").replace("]", "").replace(" ", "")
+        )
 
     async def subscribe(self):
         sys.stderr = logging_handler.stream
 
         time_now = datetime.datetime.now(tz=IST)
         if time_now.strftime("%a") == ("Sun" or "Sat"):
-            return {"status": "success", "message": "Today is Weekend."}
+            return {"status": "error", "message": "Today is Weekend."}
 
-        holiday = pd.read_csv("kotak_data/holiday.csv", index_col="Date").index.to_list()
+        holiday = pd.read_csv(
+            "kotak_data/holiday.csv", index_col="Date"
+        ).index.to_list()
         if time_now.strftime("%d-%b-%Y") in holiday:
-            return {"status": "success", "message": "Today is Market Holiday."}
+            return {"status": "error", "message": "Today is Market Holiday."}
 
-        if time_now.hour < 9 or (time_now.hour == 9 and time_now.minute < 10):
-            return {"status": "success", "message": "Market will open at 9:15 AM."}
+        if time_now.hour < 9:
+            return {
+                "status": "error",
+                "message": "Market will open at 9:15 AM.",
+            }
 
-        if time_now.hour > 15 or (time_now.hour == 15 and time_now.minute > 30):
-            return {"status": "success", "message": "Market is Closed for Today."}
+        if time_now.hour > 15 or (
+            time_now.hour == 15 and time_now.minute > 30
+        ):
+            return {
+                "status": "error",
+                "message": "Market is Closed for Today.",
+            }
 
         # Subscribe to live feed
         try:
@@ -87,7 +101,10 @@ class LiveFeed(IEventManager):
             )
         except Exception as e:
             return {"status": "error", "message": f"{e}"}
-        return {"status": "success", "message": "Successfully Subscribed to Live feed 👍"}
+        return {
+            "status": "success",
+            "message": "Successfully Subscribed to Live feed 👍",
+        }
 
     def unsubscribe(self):
         try:
@@ -96,7 +113,10 @@ class LiveFeed(IEventManager):
             logging.debug(e)
             return {"status": "error", "message": f"{e}"}
         logging.debug("Successfully Unsubscribed from Live feed 👍")
-        return {"status": "success", "message": "Successfully Unsubscribed from Live feed 👍"}
+        return {
+            "status": "success",
+            "message": "Successfully Unsubscribed from Live feed 👍",
+        }
 
     def attachObserver(self, observer: IEventListener):
         self._observers.add(observer)
@@ -117,20 +137,46 @@ class LiveFeed(IEventManager):
     def updatedb(cls, token, data):
         df = pd.DataFrame(data, columns=cls.__columns)
         cls.dataList[token].clear()
-        df["datetime"] = pd.to_datetime(df["datetime"], format="%d/%m/%Y %H:%M:%S")
-        df = df.resample(f"1T", on="datetime").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
+        df["datetime"] = pd.to_datetime(
+            df["datetime"], format="%d/%m/%Y %H:%M:%S"
+        )
+        df = df.resample(f"1T", on="datetime").agg(
+            {
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+                "volume": "last",
+                "OI": "last",
+            }
+        )
         df = pd.concat([cls.df_incomplete[token], df])
-        df = df.groupby(df.index).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "last", "OI": "last"})
+        df = df.groupby(df.index).agg(
+            {
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+                "volume": "last",
+                "OI": "last",
+            }
+        )
 
         current_time = datetime.datetime.now(IST).replace(tzinfo=None)
-        completed_df = df[df.index < current_time - datetime.timedelta(minutes=1)]
-        cls.df_incomplete[token] = df[df.index >= current_time - datetime.timedelta(minutes=1)]
+        completed_df = df[
+            df.index < current_time - datetime.timedelta(minutes=1)
+        ]
+        cls.df_incomplete[token] = df[
+            df.index >= current_time - datetime.timedelta(minutes=1)
+        ]
         if completed_df.shape[0] == 0:
             return
 
         data = completed_df.iloc[-1].to_dict()
         token_time = completed_df.index[-1].strftime("%Y-%m-%d %H:%M:%S")
-        cls.__instance.db.collection("livefeed").document(cls.__instance.stockName[token]).collection("ohlcv").document(token_time).set(data)
+        cls.__instance.db.collection("livefeed").document(
+            cls.__instance.stockName[token]
+        ).collection("ohlcv").document(token_time).set(data)
         cls.__instance.notifyObserver(token, completed_df)
         return
 
@@ -160,7 +206,9 @@ class LiveFeed(IEventManager):
 
         for token, data in LiveFeed.dataList.items():
             thread = Thread(target=LiveFeed.updatedb, args=(token, data))
-            logging.debug(f"Thread-{thread.getName} created for token : {token}")
+            logging.debug(
+                f"Thread-{thread.getName} created for token : {token}"
+            )
             LiveFeed.Threads.append(thread)
             thread.start()
 
@@ -169,7 +217,9 @@ class LiveFeed(IEventManager):
     @staticmethod
     def connect_event():
         if LiveFeed.startTime is not None:
-            logging.debug(f"Connected to Live feed.\tTime taken to reconnect : {time.perf_counter() - LiveFeed.startTime}")
+            logging.debug(
+                f"Connected to Live feed.\tTime taken to reconnect : {time.perf_counter() - LiveFeed.startTime}"
+            )
         return
 
     @staticmethod

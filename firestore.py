@@ -35,11 +35,18 @@ class Firestore:
     @classmethod
     def add_strategy(cls, token: int, strategy: dict):
         db = Firestore.db()
-        df = pd.read_hdf("kotak_data/tokens.hdf5", key="cashTokens", mode="r", where="index==" + str(token))
+        df = pd.read_hdf(
+            "kotak_data/tokens.hdf5",
+            key="cashTokens",
+            mode="r",
+            where="index==" + str(token),
+        )
         print(df)
         documentName = (df["exchange"] + "_" + df["instrumentName"]).values[0]
         print(documentName)
-        db.collection("watchlist").document(documentName).collection("strategy").document().set(strategy)
+        db.collection("watchlist").document(documentName).collection(
+            "strategy"
+        ).document().set(strategy)
         return {"status": "success", "message": "Strategy added successfully."}
 
 
