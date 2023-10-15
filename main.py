@@ -8,7 +8,6 @@ import uvicorn
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 
 from indicators import Indicator
-from kotakclient import KotakClient
 from livefeed import LiveFeed
 from models import *
 from orderclient import OrderClient, get_quote
@@ -20,25 +19,18 @@ from watchlist import Watchlist
 app = FastAPI()
 active_connections = set()
 subscribed_flag = False
-livefeed = LiveFeed()
 
 
 @app.on_event("startup")
 def startup_event():
-    global portfolio, indicator
-    portfolio = Portfolio()
-    indicator = Indicator()
-    indicator.attachObserver(portfolio)
-    livefeed.attachObserver(indicator)
-    livefeed.attachObserver(portfolio)
+    return
 
 
 @app.on_event("shutdown")
 def shutdown_event():
     if subscribed_flag:
         livefeed.unsubscribe()
-    livefeed.detachObserver(indicator)
-    indicator.detachObserver(portfolio)
+    return
 
 
 @app.get("/")
@@ -65,18 +57,36 @@ async def subscribe():
     global subscribed_flag
     if subscribed_flag:
         return {"status": "success", "message": "Already Subscribed"}
+
+    global portfolio, indicator, livefeed
+    livefeed = LiveFeed()
+
     result = await livefeed.subscribe()
     if result["status"] == "success":
         subscribed_flag = True
+        portfolio = Portfolio()
+        indicator = Indicator()
+        indicator.attachObserver(portfolio)
+        livefeed.attachObserver(indicator)
+        livefeed.attachObserver(portfolio)
+    else:
+        del livefeed
     return result
 
 
 @app.get("/unsubscribe")
 def unsubscribe():
     global subscribed_flag
+    if not subscribed_flag:
+        return {"status": "success", "message": "Already Unsubscribed"}
+
+    global portfolio, indicator, livefeed
     result = livefeed.unsubscribe()
     if result["status"] == "success":
         subscribed_flag = False
+        del livefeed
+        del indicator
+        del portfolio
     return result
 
 
