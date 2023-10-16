@@ -18,9 +18,6 @@ class OrderClient(IOrderClient):
         self.open_positions = []
         self.funds = 100000
 
-    def __del__(self):
-        pass
-
     def get_funds(self):
         return self.funds
 

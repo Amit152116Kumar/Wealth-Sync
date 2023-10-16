@@ -1,3 +1,4 @@
+import logging
 import math
 import re
 import time
@@ -8,9 +9,11 @@ from py_vollib.black_scholes.greeks.analytical import *
 from py_vollib.black_scholes.implied_volatility import implied_volatility
 
 from models import IST, OptionType, QuoteType, upcoming_expiry
+from mylogger import logging_handler
 from orderclient import OrderClient, get_quote
 
 DATASTORE = "kotak_data/tokens.hdf5"
+logging.basicConfig(level=logging.DEBUG, handlers=[logging_handler])
 
 
 class OptionGeeks:
@@ -25,7 +28,9 @@ class OptionGeeks:
         if underlying_price:
             self.underlying_price = underlying_price
         else:
-            self.underlying_price = float(get_quote(token, QuoteType.ltp))
+            response = get_quote(token, QuoteType.ltp)
+            logging.info(f"Token : {token} - Underlying Price : {response}")
+            self.underlying_price = response
 
         if strike_price:
             self.strike_price = strike_price
@@ -46,10 +51,9 @@ class OptionGeeks:
                 else:
                     self.strike_price = otm
 
-        print(self.strike_price)
         if expiry is None:
             expiry = upcoming_expiry()
-        print(expiry)
+            logging.debug(f"Expiry : {expiry}")
         token_info = pd.read_hdf(
             DATASTORE, "cashTokens", mode="r", where=f"index=='{token}'"
         )["instrumentName"].values[0]
@@ -58,19 +62,17 @@ class OptionGeeks:
             DATASTORE,
             "fnoTokens",
             mode="r",
-            where=f"strike=='{self.strike_price}' & optionType=='{option_type.value}' "
+            where=f"strike=='{self.strike_price}' & optionType=='{option_type.value}' ",
         )
-        
-        print(strike_token)
 
         self.strike_token = strike_token.index.values[0]
-        print(self.strike_token)
+
         self._expiry_date = (
             datetime.strptime(expiry, "%d%b%y").astimezone(IST)
             - datetime.now(IST)
         ).days / 365
         self.option_price = get_quote(strike_token, QuoteType.ltp)
-        print(self.option_price)
+        logging.debug(f"Option Price : {self.option_price}")
         self._option_type = option_type.value[0].lower()
         self._interest_rate = 0.1
         self.iv = self.find_IV()
@@ -142,6 +144,13 @@ class OptionGeeks:
         return round(r, 5)
 
     def find_all(self):
+        """
+        The function "find_all" returns a dictionary containing the values of various financial metrics
+        such as implied volatility, delta, gamma, theta, vega, and rho.
+        :return: a dictionary with keys "iv", "delta", "gamma", "theta", "vega", and "rho". The values
+        associated with these keys are the results of calling the corresponding methods `find_delta()`,
+        `find_gamma()`, `find_theta()`, `find_vega()`, and `find_rho()`.
+        """
         iv = self.iv
         d = self.find_delta()
         g = self.find_gamma()

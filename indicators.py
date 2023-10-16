@@ -28,6 +28,8 @@ class Indicator(IEventManager, IEventListener):
         self.df_incomplete = defaultdict(pd.DataFrame)
         self.df_incomplete_1 = defaultdict(pd.DataFrame)
 
+        self.signal = defaultdict(tuple)
+
         docs = Firestore.get_watchlist()
 
         for doc in docs:
@@ -132,13 +134,14 @@ class Indicator(IEventManager, IEventListener):
         self.df_complete[token] = pd.concat(
             [self.df_complete[token], completed_df]
         )
+
+        if self.df_complete[token].shape[0] < WINDOW:
+            return
+
         if self.df_complete[token].shape[0] == WINDOW + 1:
             self.df_complete[token].drop(
                 self.df_complete[token].index[:1], inplace=True
             )
-
-        if self.df_complete[token].shape[0] < WINDOW:
-            return
 
         sma = self.SMA(self.df_complete[token], STRATEGY["sma"]).values
         rsi = self.RSI(self.df_complete[token], STRATEGY["rsi"]).values
@@ -165,7 +168,12 @@ class Indicator(IEventManager, IEventListener):
             and fast_direction[-1]
             and slow_direction[-1]
         ):
-            self.notifyObserver(token, TransactionType.buy, OptionType.call)
+            current_signal = (token, TransactionType.buy, OptionType.call)
+            if self.signal[token] != current_signal:
+                self.signal[token] = current_signal
+                self.notifyObserver(
+                    token, TransactionType.buy, OptionType.call
+                )
             logging.debug(f"token: {token} BUY call")
 
         elif (
@@ -176,11 +184,17 @@ class Indicator(IEventManager, IEventListener):
             and not fast_direction[-1]
             and not slow_direction[-1]
         ):
-            self.notifyObserver(token, TransactionType.buy, OptionType.put)
+            current_signal = (token, TransactionType.buy, OptionType.put)
+            if self.signal[token] != current_signal:
+                self.signal[token] = current_signal
+                self.notifyObserver(token, TransactionType.buy, OptionType.put)
             logging.debug(f"token: {token} BUY put")
 
         else:
-            self.notifyObserver(token, TransactionType.sell)
+            current_signal = (token, TransactionType.sell)
+            if self.signal[token] != current_signal:
+                self.signal[token] = current_signal
+                self.notifyObserver(token, TransactionType.sell)
             logging.debug(f"token: {token} SELL call/put")
 
         return
