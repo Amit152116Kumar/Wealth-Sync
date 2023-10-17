@@ -68,7 +68,6 @@ async def subscribe():
         indicator = Indicator()
         indicator.attachObserver(portfolio)
         livefeed.attachObserver(indicator)
-        livefeed.attachObserver(portfolio)
     else:
         del livefeed
     return result
@@ -139,7 +138,7 @@ def get_Quote(
         quoteType = QuoteType.depth
     else:
         quoteType = QuoteType.ohlc
-    return get_quote(quoteType, token)
+    return get_quote(instrumentToken=token, quote_type=quoteType)
 
 
 @app.get("/position/{position_type}")

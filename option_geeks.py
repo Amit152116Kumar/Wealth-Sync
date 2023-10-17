@@ -22,15 +22,15 @@ class OptionGeeks:
         token,
         option_type: OptionType,
         strike_price=None,
-        expiry=None,
         underlying_price=None,
     ) -> None:
         if underlying_price:
             self.underlying_price = underlying_price
         else:
             response = get_quote(token, QuoteType.ltp)
-            logging.info(f"Token : {token} - Underlying Price : {response}")
-            self.underlying_price = response
+            if type(response) == dict:
+                raise Exception(response)
+            self.underlying_price = float(response)
 
         if strike_price:
             self.strike_price = strike_price
@@ -51,27 +51,30 @@ class OptionGeeks:
                 else:
                     self.strike_price = otm
 
-        if expiry is None:
-            expiry = upcoming_expiry()
-            logging.debug(f"Expiry : {expiry}")
-        token_info = pd.read_hdf(
+        token_name = pd.read_hdf(
             DATASTORE, "cashTokens", mode="r", where=f"index=='{token}'"
         )["instrumentName"].values[0]
-        token_info = token_info.split()
+
         strike_token = pd.read_hdf(
             DATASTORE,
             "fnoTokens",
             mode="r",
-            where=f"strike=='{self.strike_price}' & optionType=='{option_type.value}' ",
+            where=f"instrumentName == '{token_name}' & strike=='{self.strike_price}' & optionType=='{option_type.value}' ",
         )
 
+        expiry = strike_token["expiry"].values[0]
         self.strike_token = strike_token.index.values[0]
 
         self._expiry_date = (
             datetime.strptime(expiry, "%d%b%y").astimezone(IST)
             - datetime.now(IST)
         ).days / 365
-        self.option_price = get_quote(strike_token, QuoteType.ltp)
+
+        response = get_quote(strike_token, QuoteType.ltp)
+        if type(response) == dict:
+            raise Exception(response)
+        self.option_price = float(response)
+
         logging.debug(f"Option Price : {self.option_price}")
         self._option_type = option_type.value[0].lower()
         self._interest_rate = 0.1

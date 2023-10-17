@@ -1,11 +1,13 @@
+import datetime
 import email
 import os
 import time
 from imaplib import IMAP4_SSL
 
-from dotenv import load_dotenv, set_key
+from dotenv import load_dotenv
 
 from ks_api_client import ks_api
+from models import IST
 
 
 class KotakClient:
@@ -62,10 +64,14 @@ class KotakClient:
 
         # Get session for 2FA authentication if doesn't exist then fetch
         # access code from mail and login
-        access_code = self.__fetch_access_code()
+        access_code = None
+        while not access_code:
+            access_code = self.__fetch_access_code()
+            if access_code is None:
+                time.sleep(1)
 
         try:
-            response = client.session_2fa(access_code=access_code)
+            client.session_2fa(access_code=access_code)
 
         except Exception as e:
             print("Error in Login : ", e)
@@ -80,16 +86,26 @@ class KotakClient:
         mail.login(username, password)  # type: ignore
         mail.select("inbox")
         _, messages = mail.search(
-            None, f'FROM "accesscode@kotaksecurities.com"'
+            None, 'FROM "accesscode@kotaksecurities.com"'
         )
-        msg_id = messages[0].split(b" ")[-1]
 
-        _, message = mail.fetch(msg_id, "(RFC822)")
-        for response in message:
-            if isinstance(response, tuple):
-                msg = email.message_from_bytes(response[1])
-                access_code = msg["Subject"].split(" ")[-1]
-                return str(access_code)
+        for message in messages:
+            msg_id = message.split(b" ")[-1]
+
+            _, msg_info = mail.fetch(msg_id, "(RFC822)")
+            for response in msg_info:
+                if isinstance(response, tuple):
+                    msg = email.message_from_bytes(response[1])
+                    email_date = msg["Date"]
+                    email_date = datetime.datetime.strptime(
+                        email_date, "%d %b %Y %H:%M:%S %z"
+                    )
+                    if (
+                        email_date.date()
+                        == datetime.datetime.now(tz=IST).date()
+                    ):
+                        access_code = msg["Subject"].split(" ")[-1]
+                        return str(access_code)
         return None
 
 

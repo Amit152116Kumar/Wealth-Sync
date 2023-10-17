@@ -36,10 +36,27 @@ class Watchlist:
             cash_token.drop(
                 ["expiry", "OptionType", "strike"], axis=1, inplace=True
             )
+
+            bank_nifty = (
+                cash_token["instrumentName"]
+                .where(cash_token["instrumentName"] == "NIFTY BANK")
+                .dropna()
+                .index
+            )
+            cash_token.loc[bank_nifty]["instrumentName"] = "BANKNIFTY"
+
+            nifty = (
+                cash_token["instrumentName"]
+                .where(cash_token["instrumentName"] == "NIFTY 50")
+                .dropna()
+                .index
+            )
+            cash_token.loc[nifty]["instrumentName"] = "NIFTY"
+
             cash_token.to_hdf(
                 DATASTORE,
                 "/cashTokens",
-                mode="a",
+                mode="w",
                 append=False,
                 index=True,
                 complevel=9,

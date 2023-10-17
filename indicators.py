@@ -262,7 +262,7 @@ class Indicator(IEventManager, IEventListener):
         return trend, direction == 1
 
 
-@njit
+@njit(nopython=True)
 def _get_final_bands_nb(close, upper, lower):
     trend = np.full(close.shape, np.nan)
     direction = np.full(close.shape, 1)
@@ -287,7 +287,7 @@ def _get_final_bands_nb(close, upper, lower):
     return trend, direction
 
 
-@njit
+@njit(nopython=True)
 def calculate_sma(prices, window=14):
     sma = np.zeros_like(prices)
     sma[:window] = np.mean(prices[:window])

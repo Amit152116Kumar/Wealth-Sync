@@ -159,7 +159,7 @@ class LiveFeed(IEventManager):
             df["datetime"] = pd.to_datetime(
                 df["datetime"], format="%d/%m/%Y %H:%M:%S"
             )
-            df = df.resample(f"1T", on="datetime").agg(
+            df = df.resample("1T", on="datetime").agg(
                 {
                     "open": "first",
                     "high": "max",

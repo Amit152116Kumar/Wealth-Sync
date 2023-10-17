@@ -14,3 +14,4 @@ read.py
 !tokens.hdf5
 build
 *.c
+kotak_data/tokens.hdf5
