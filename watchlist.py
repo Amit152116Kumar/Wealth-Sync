@@ -43,7 +43,7 @@ class Watchlist:
                 .dropna()
                 .index
             )
-            cash_token.loc[bank_nifty]["instrumentName"] = "BANKNIFTY"
+            cash_token.loc[bank_nifty,["instrumentName"]] = "BANKNIFTY"
 
             nifty = (
                 cash_token["instrumentName"]
@@ -51,7 +51,7 @@ class Watchlist:
                 .dropna()
                 .index
             )
-            cash_token.loc[nifty]["instrumentName"] = "NIFTY"
+            cash_token.loc[nifty,['instrumentName']] ="NIFTY"
 
             cash_token.to_hdf(
                 DATASTORE,

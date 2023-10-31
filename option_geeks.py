@@ -24,33 +24,53 @@ class OptionGeeks:
         strike_price=None,
         underlying_price=None,
     ) -> None:
+        self.underlying_price = self.find_underlying_price(token,underlying_price)
+        self.strike_price = self.find_strike_price(strike_price,option_type)
+
+        strike_token = self.find_strike_token(token,option_type)
+        self.strike_token = strike_token.index[0].item()
+
+        self._expiry_date = self.find_expiry(strike_token)
+        
+        response = get_quote(self.strike_token, QuoteType.ltp)
+        if type(response) == dict:
+            raise Exception(response)
+        self.option_price = float(response)
+
+        self._option_type = option_type.value[0].lower()
+        self._interest_rate = 0.1
+        self.iv = self.find_IV()
+    
+    def find_underlying_price(self,token,underlying_price):
         if underlying_price:
-            self.underlying_price = underlying_price
+            return underlying_price
         else:
             response = get_quote(token, QuoteType.ltp)
             if type(response) == dict:
                 raise Exception(response)
-            self.underlying_price = float(response)
-
+            return float(response)
+        
+    def find_strike_price(self,strike_price,option_type):
         if strike_price:
-            self.strike_price = strike_price
+            return strike_price
         else:
             if option_type == OptionType.call:
                 otm = math.ceil(self.underlying_price / 100) * 100
                 diff = otm - self.underlying_price
                 if diff < 10:
-                    self.strike_price = otm + 100
+                    return otm + 100
                 else:
-                    self.strike_price = otm
+                    return otm
 
             elif option_type == OptionType.put:
                 otm = math.floor(self.underlying_price / 100) * 100
                 diff = self.underlying_price - otm
                 if diff < 10:
-                    self.strike_price = otm - 100
+                    return otm - 100
                 else:
-                    self.strike_price = otm
+                    return otm
 
+    def find_strike_token(self,token,option_type):
         token_name = pd.read_hdf(
             DATASTORE, "cashTokens", mode="r", where=f"index=='{token}'"
         )["instrumentName"].values[0]
@@ -61,25 +81,21 @@ class OptionGeeks:
             mode="r",
             where=f"instrumentName == '{token_name}' & strike=='{self.strike_price}' & optionType=='{option_type.value}' ",
         )
+        return strike_token.head(1)
 
+    def find_expiry(self,strike_token):
         expiry = strike_token["expiry"].values[0]
-        self.strike_token = strike_token.index.values[0]
+        expiry = datetime.strptime(expiry, "%d%b%y").astimezone(IST)+timedelta(hours=15,minutes=30)
+        
+        time_now = datetime.now(IST)
+        if time_now.hour>15 or (time_now.hour>=15 and time_now.minute>30):
+            curr_time = time_now.replace(hour=15,minute=30)
+        else :
+            curr_time = time_now
 
-        self._expiry_date = (
-            datetime.strptime(expiry, "%d%b%y").astimezone(IST)
-            - datetime.now(IST)
-        ).days / 365
-
-        response = get_quote(strike_token, QuoteType.ltp)
-        if type(response) == dict:
-            raise Exception(response)
-        self.option_price = float(response)
-
-        logging.debug(f"Option Price : {self.option_price}")
-        self._option_type = option_type.value[0].lower()
-        self._interest_rate = 0.1
-        self.iv = self.find_IV()
-
+        expiry_time = (expiry- curr_time).total_seconds()/(3600*24*365)
+        return expiry_time
+    
     def find_IV(self):
         iv = implied_volatility(
             self.option_price,
@@ -172,7 +188,7 @@ class OptionGeeks:
 
 if __name__ == "__main__":
     start = time.perf_counter()
-    og = OptionGeeks(11717, OptionType.call, underlying_price=44500)
+    og = OptionGeeks(11717, OptionType.call)
     print(
         og.find_all(),
         og.strike_price,
