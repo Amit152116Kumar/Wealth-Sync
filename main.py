@@ -61,16 +61,14 @@ async def subscribe():
     global portfolio, indicator, livefeed
     livefeed = LiveFeed()
 
-    result = await livefeed.subscribe()
-    if result["status"] == "success":
+    response = await livefeed.subscribe()
+    if response["status"] == "success":
         subscribed_flag = True
         portfolio = Portfolio()
         indicator = Indicator()
         indicator.attachObserver(portfolio)
         livefeed.attachObserver(indicator)
-    else:
-        del livefeed
-    return result
+    return response
 
 
 @app.get("/unsubscribe")
@@ -80,28 +78,31 @@ def unsubscribe():
         return {"status": "success", "message": "Already Unsubscribed"}
 
     global portfolio, indicator, livefeed
-    result = livefeed.unsubscribe()
-    if result["status"] == "success":
+    response = livefeed.unsubscribe()
+    if response["status"] == "success":
         subscribed_flag = False
         del livefeed
         del indicator
         del portfolio
-    return result
+    return response
 
 
 @app.get("/orders")
 def get_orders():
-    return OrderClient().get_order_report()
+    response = OrderClient().get_order_report()
+    return response
 
 
 @app.get("/trades")
 def get_trades():
-    return OrderClient().get_trade_report()
+    response = OrderClient().get_trade_report()
+    return response
 
 
 @app.get("/funds")
 def get_funds():
-    return OrderClient().get_funds()
+    response = OrderClient().get_funds()
+    return response
 
 
 @app.get("/margin")
@@ -119,9 +120,11 @@ def get_margin(
         transactionType = TransactionType.buy
     else:
         transactionType = TransactionType.sell
-    return OrderClient().get_required_margin(
+        
+    response = OrderClient().get_required_margin(
         transactionType, [OrderParams(token, quantity, price)]
     )
+    return response
 
 
 @app.get("/quote/{quote_type}")
@@ -138,7 +141,8 @@ def get_Quote(
         quoteType = QuoteType.depth
     else:
         quoteType = QuoteType.ohlc
-    return get_quote(instrumentToken=token, quote_type=quoteType)
+    response = get_quote(instrumentToken=token, quote_type=quoteType)
+    return response
 
 
 @app.get("/position/{position_type}")
@@ -149,13 +153,14 @@ def get_Open_position(position_type: str):
         positionType = PositionType.stocks
     else:
         positionType = PositionType.today
-
-    return OrderClient().get_position(positionType)
+    response = OrderClient().get_position(positionType)
+    return response
 
 
 @app.get("/fetchTokens")
 def get_tokens():
-    return Watchlist().fetch_tokens()
+    response = Watchlist().fetch_tokens()
+    return response
 
 
 if __name__ == "__main__":
