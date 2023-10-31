@@ -8,8 +8,8 @@ from orderclient import get_quote
 
 class OrderClient(IOrderClient):
     gst = 0.18
-    sell_stamp_duty = 0.000625
-    transaction_charges = 0.00005
+    stt_charges = 0.000625
+    transaction_charges = 0.0005
     sebi_charges = 0.000001
     buy_stamp_charges = 0.00003
 
@@ -77,7 +77,7 @@ class OrderClient(IOrderClient):
             )
             gst_charges = gst_amount * self.gst
             total_charges = (
-                gst_amount + gst_charges + (amount * self.sell_stamp_duty)
+                gst_amount + gst_charges + (amount * self.stt_charges)
             )
             orderinfo["total_charges"] = total_charges
             self.funds += amount - total_charges

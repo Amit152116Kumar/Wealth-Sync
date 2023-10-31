@@ -40,6 +40,7 @@ class Portfolio(IEventListener):
         orderbook = self.order_client.get_order_report()
         funds = self.order_client.get_funds()
         pnl = funds - self.startfund
+        logging.info(f"Open Position : {self.order_client.open_positions}")
         logging.info(f"Orderbook : {orderbook}")
         logging.info(f"PnL : {pnl}")
 
@@ -118,18 +119,19 @@ class Portfolio(IEventListener):
         )
         logging.debug(optionGeek.find_all())
 
-        self.strike_token[token] = optionGeek.strike_token
-        self.strike_price[token] = optionGeek.strike_price
-        self.optionType[token] = optionType
-
         response = self.order_client.placeOrder(
             orderType=OrderType.mis_order,
             instrumentToken=optionGeek.strike_token,
             transactionType=TransactionType.buy,
             qty=self.quantity,
         )
+        
+        if response["status"] == "success":
+            self.strike_token[token] = optionGeek.strike_token
+            self.strike_price[token] = optionGeek.strike_price
+            self.optionType[token] = optionType
         logging.info(response)
-        return
+        return response
 
     def sell(self, token):
         """
