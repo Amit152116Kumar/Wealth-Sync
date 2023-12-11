@@ -1,0 +1,15 @@
+[Unit]
+Description=My REST API Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Wealth-Sync
+ExecStart=/home/pi/Wealth-Sync/main.sh
+ExecStop=/bin/kill -s TERM $MAINPID
+TimeoutSec=5s
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
