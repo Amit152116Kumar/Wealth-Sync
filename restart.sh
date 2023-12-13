@@ -19,10 +19,15 @@ elif [ $LOCAL = $BASE ]; then
     # Reset local code to match remote repository
     git reset --hard origin/master
 
-    # Activate virtual environment and install requirements
-    source myenv/bin/activate
-    pip install -r requirements.txt
+    # Check for changes in requirements.txt
+    REQUIREMENTS_CHANGED=$(git diff --name-only HEAD@{1} HEAD | grep 'requirements.txt')
 
+    if [ ! -z "$REQUIREMENTS_CHANGED" ]; then
+        # Activate virtual environment and install requirements
+        source myenv/bin/activate
+        pip install -r requirements.txt
+    fi
+    
     # Set execute permissions on scripts
     chmod +x main.sh
     chmod +x restart.sh
