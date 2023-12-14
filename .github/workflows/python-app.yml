@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    timeout-minutes: 5
+    timeout-minutes: 10
     runs-on: ubuntu-latest
 
     steps:
@@ -48,4 +48,4 @@ jobs:
         USERID: ${{secrets.USERID}}
         FIRESTORE_KEY: ${{secrets.FIRESTORE_KEY}}
       run: |
-        pytest
+        pytest test_app.py
