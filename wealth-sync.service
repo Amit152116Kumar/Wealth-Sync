@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/Wealth-Sync
-ExecStart=/home/pi/Wealth-Sync/main.sh
+User=USER
+WorkingDirectory=CWD
+ExecStart=ENV_PATH/bin/python CWD/main.py
 ExecStop=/bin/kill -s TERM $MAINPID
 TimeoutSec=5s
 Restart=always

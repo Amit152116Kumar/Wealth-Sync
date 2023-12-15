@@ -8,9 +8,13 @@ LOCAL=$(git rev-parse @)
 REMOTE=$(git rev-parse @{u})
 BASE=$(git merge-base @ @{u})
 
+# Reset the ks-api-client submodule to the latest commit
+git -C src/ks-api-client/ fetch origin
+git -C src/ks-api-client/ reset --hard origin/myFeature
+
 if [ $LOCAL = $REMOTE ]; then
     echo "Up-to-date"
-elif [ $LOCAL = $BASE ]; then
+else 
     echo "Need to pull"
 
     # Stop the FastAPI service
@@ -24,17 +28,9 @@ elif [ $LOCAL = $BASE ]; then
 
     if [ ! -z "$REQUIREMENTS_CHANGED" ]; then
         # Activate virtual environment and install requirements
-        source myenv/bin/activate
-        pip install -r requirements.txt
+        ENV_PATH/bin/pip install -r requirements.txt
     fi
     
-    # Set execute permissions on scripts
-    chmod +x main.sh
-    chmod +x restart.sh
-    chmod +x livefeed.sh
-
     # Restart the FastAPI service
     sudo systemctl start wealth-sync.service
-else
-    echo "Diverged"
 fi
