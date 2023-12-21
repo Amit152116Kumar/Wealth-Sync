@@ -40,7 +40,7 @@ def create_cronjob(cwd, env_path):
         # Write the content to the restart.sh file
         with open("service_restart.sh", "w") as f:
             f.write(content)
-        
+
     run_command("chmod +x service_restart.sh")
     run_command(
         f"crontab -l | {{ cat; echo '0 7 * * * {cwd}/service_restart.sh'; }} | crontab -"
@@ -55,7 +55,7 @@ def create_cronjob(cwd, env_path):
     )
 
     run_command(
-        f"crontab -l | {{ cat; echo '31 15 * * 1-5 curl -X GET http://localhost:8080/unsubcribe'; }} | crontab -"
+        f"crontab -l | {{ cat; echo '31 15 * * 1-5 curl -X GET http://localhost:8080/unsubscribe'; }} | crontab -"
     )
 
     return
@@ -72,14 +72,14 @@ def create_conda_env():
     # check if conda is installed
     run_command("conda --version")
     output, _ = run_command("conda env list | grep wealth-sync")
-    
+
     if output:
         print("Conda environment already exists")
     else:
         # Create a conda environment with the name wealth-sync
         run_command("conda create -n wealth-sync python=3.10 -y")
         output, _ = run_command("conda env list | grep wealth-sync")
-    
+
     env_path = output.split(" ")[-1].strip()
 
     # Install the required packages

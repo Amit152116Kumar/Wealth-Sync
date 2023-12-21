@@ -74,7 +74,7 @@ class Indicator(IEventManager, IEventListener):
                 )
                 self.df_complete[token] = df.tail(self.window[token])
                 logging.debug(
-                    f"Initial Shape of the token {token, self.df_complete[token].shape}"
+                    f"Shape of {id} - {token}: {self.df_complete[token].shape} - [{self.df_complete[token].index[0]} - {self.df_complete[token].index[-1]}]"
                 )
             except Exception as e:
                 logging.error(f"Error in Indicator init: {e}")
@@ -171,9 +171,7 @@ class Indicator(IEventManager, IEventListener):
             current_signal = (token, TransactionType.buy, OptionType.call)
             if self.signal[token] != current_signal:
                 self.signal[token] = current_signal
-                self.notifyObserver(
-                    token, TransactionType.buy, OptionType.call
-                )
+                self.notifyObserver(token, TransactionType.buy, OptionType.call)
             logging.debug(f"token: {token} BUY call")
 
         elif (

@@ -94,6 +94,7 @@ class Firestore:
             db.collection("livefeed")
             .document(documentName)
             .collection("ohlcv")
+            .order_by("__name__", direction=firestore.Query.DESCENDING)
             .limit(size)
             .stream()
         )
