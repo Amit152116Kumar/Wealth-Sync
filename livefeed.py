@@ -125,7 +125,6 @@ class LiveFeed(IEventManager):
         return super().detachObserver(observer)
 
     def notifyObserver(self, *args):
-        logging.debug("livefeed -> notify Observers")
         for observer in self._observers:
             observer.update(*args)
         return super().notifyObserver()
@@ -151,7 +150,6 @@ class LiveFeed(IEventManager):
         LiveFeed.count = 0
         for thread in LiveFeed.Threads:
             thread.join()
-            logging.debug(f"Thread-{thread.getName} joined")
         LiveFeed.Threads.clear()
 
         for token, data in LiveFeed.dataList.items():
@@ -171,9 +169,6 @@ class LiveFeed(IEventManager):
             )
             thread = Thread(
                 target=LiveFeed.__instance.notifyObserver, args=(token, df)
-            )
-            logging.debug(
-                f"Thread-{thread.getName} created for token : {token}"
             )
             LiveFeed.Threads.append(thread)
             thread.start()
