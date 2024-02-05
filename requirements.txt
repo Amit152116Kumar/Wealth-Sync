@@ -1,5 +1,5 @@
 certifi==2023.7.22
-fastapi==0.103.2
+fastapi==0.109.1
 firebase-admin==6.2.0
 google-api-core==2.12.0
 google-api-python-client==2.103.0
