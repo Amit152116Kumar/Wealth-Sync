@@ -1,11 +1,10 @@
 import json
 
 from kotakclient import KotakClient
-from models import *
-from order_interface import IOrderClient
+from utils import *
 
 
-class OrderClient(IOrderClient):
+class OrderClient:
     def __init__(self) -> None:
         self._client = KotakClient.get_client
 

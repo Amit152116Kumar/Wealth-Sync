@@ -6,7 +6,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from firebase_admin import credentials, firestore, initialize_app
 
-from models import Strategy
+from utils import Strategy
 
 
 class Firestore:

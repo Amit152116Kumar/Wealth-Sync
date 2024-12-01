@@ -1,3 +1,4 @@
+import logging
 import os
 
 import pandas as pd
@@ -7,6 +8,9 @@ from dotenv import load_dotenv
 from firestore import Firestore
 
 DATASTORE = "kotak_data/tokens.hdf5"
+from utils import logging_handler
+
+logging.basicConfig(level=logging.INFO, handlers=[logging_handler])
 
 
 class Watchlist:
@@ -25,6 +29,7 @@ class Watchlist:
         }
         res = requests.get(token_url, headers=header)
         if res.status_code != 200:
+            logging.error("Request Failed : " + res.json())
             return res.status_code
         res = res.json()
 
@@ -43,7 +48,7 @@ class Watchlist:
                 .dropna()
                 .index
             )
-            cash_token.loc[bank_nifty,["instrumentName"]] = "BANKNIFTY"
+            cash_token.loc[bank_nifty, ["instrumentName"]] = "BANKNIFTY"
 
             nifty = (
                 cash_token["instrumentName"]
@@ -51,7 +56,7 @@ class Watchlist:
                 .dropna()
                 .index
             )
-            cash_token.loc[nifty,['instrumentName']] ="NIFTY"
+            cash_token.loc[nifty, ["instrumentName"]] = "NIFTY"
 
             cash_token.to_hdf(
                 DATASTORE,
@@ -82,6 +87,7 @@ class Watchlist:
                 data_columns=True,
             )
         except Exception as e:
+            logging.error("Tokens Not Found : " + str(e))
             return {"status": "error", "message": str(e)}
 
         return {"status": "success", "message": "Token IDs fetched and saved"}

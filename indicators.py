@@ -9,9 +9,8 @@ import pandas_ta as ta
 from numba import njit
 
 from firestore import Firestore
-from models import IST, OptionType, TransactionType
-from mylogger import logging_handler
 from observer_pattern import IEventListener, IEventManager
+from utils import IST, OptionType, TransactionType, logging_handler
 
 logging.basicConfig(level=logging.DEBUG, handlers=[logging_handler])
 
@@ -73,7 +72,7 @@ class Indicator(IEventManager, IEventListener):
                     .dropna()
                 )
                 self.df_complete[token] = df.tail(self.window[token])
-                logging.debug(
+                logging.info(
                     f"Shape of {id} - {token}: {self.df_complete[token].shape} - [{self.df_complete[token].index[0]} - {self.df_complete[token].index[-1]}]"
                 )
             except Exception as e:
@@ -88,9 +87,19 @@ class Indicator(IEventManager, IEventListener):
             self._observers.remove(observer)
         return super().detachObserver(observer)
 
-    def notifyObserver(self, *args):
+    def notifyObserver(self, token: str, transactionType: TransactionType):
         for observer in self._observers:
-            observer.update(*args)
+            observer.update(token, transactionType)
+        return super().notifyObserver()
+
+    def notifyObserver(
+        self,
+        token: str,
+        transactionType: TransactionType,
+        optionType: OptionType,
+    ):
+        for observer in self._observers:
+            observer.update(token, transactionType, optionType)
         return super().notifyObserver()
 
     def data_handler(self, token, df: pd.DataFrame):
@@ -170,9 +179,9 @@ class Indicator(IEventManager, IEventListener):
         ):
             current_signal = (token, TransactionType.buy, OptionType.call)
             if self.signal[token] != current_signal:
-                self.signal[token] = current_signal
-                self.notifyObserver(token, TransactionType.buy, OptionType.call)
-            logging.debug(f"token: {token} BUY call")
+                res = self.notifyObserver(
+                    token, TransactionType.buy, OptionType.call
+                )
 
         elif (
             not sma[-1]
@@ -184,22 +193,20 @@ class Indicator(IEventManager, IEventListener):
         ):
             current_signal = (token, TransactionType.buy, OptionType.put)
             if self.signal[token] != current_signal:
-                self.signal[token] = current_signal
-                self.notifyObserver(token, TransactionType.buy, OptionType.put)
-            logging.debug(f"token: {token} BUY put")
+                res = self.notifyObserver(
+                    token, TransactionType.buy, OptionType.put
+                )
 
         else:
             current_signal = (token, TransactionType.sell)
             if self.signal[token] != current_signal:
-                self.signal[token] = current_signal
-                self.notifyObserver(token, TransactionType.sell)
-            logging.debug(f"token: {token} SELL call/put")
+                res = self.notifyObserver(token, TransactionType.sell)
 
+        if res == "success":
+            self.signal[token] = current_signal
         return
 
-    def update(self, *args):
-        token = args[0]
-        df: pd.DataFrame = args[1]
+    def update(self, token, df: pd.DataFrame):
         self.updatedb(token, df)
         return
 

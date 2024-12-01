@@ -1,12 +1,11 @@
 import datetime
 import json
 
-from models import IST, OrderType, PositionType, QuoteType, TransactionType
-from order_interface import IOrderClient
+from utils import IST, OrderType, PositionType, QuoteType, TransactionType
 from orderclient import get_quote
 
 
-class OrderClient(IOrderClient):
+class OrderClient:
     gst = 0.18
     stt_charges = 0.000625
     transaction_charges = 0.0005
@@ -30,7 +29,6 @@ class OrderClient(IOrderClient):
         instrumentToken: str,
         transactionType: TransactionType,
         qty: int,
-        trigger_price: int = 0,
         price: int = 0,
         variety: str = "REGULAR",
         tag: str = "fno",
@@ -44,7 +42,9 @@ class OrderClient(IOrderClient):
 
         amount = qty * price
         orderinfo = {
-            "timestamp": datetime.datetime.now(IST),
+            "timestamp": datetime.datetime.now(IST).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
             "orderType": orderType.value,
             "instrumentToken": instrumentToken,
             "transactionType": transactionType.value,

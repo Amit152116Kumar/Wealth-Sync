@@ -1,6 +1,4 @@
 import logging
-import math
-import re
 import time
 from datetime import datetime, timedelta
 
@@ -8,9 +6,8 @@ import pandas as pd
 from py_vollib.black_scholes.greeks.analytical import *
 from py_vollib.black_scholes.implied_volatility import implied_volatility
 
-from models import IST, OptionType, QuoteType, upcoming_expiry
-from mylogger import logging_handler
-from orderclient import OrderClient, get_quote
+from orderclient import get_quote
+from utils import IST, OptionType, QuoteType, logging_handler
 
 DATASTORE = "kotak_data/tokens.hdf5"
 logging.basicConfig(level=logging.DEBUG, handlers=[logging_handler])
@@ -19,182 +16,182 @@ logging.basicConfig(level=logging.DEBUG, handlers=[logging_handler])
 class OptionGeeks:
     def __init__(
         self,
-        token,
+        token: str,
         option_type: OptionType,
-        strike_price=None,
-        underlying_price=None,
-    ) -> None:
-        self.underlying_price = self.find_underlying_price(token,underlying_price)
-        self.strike_price = self.find_strike_price(strike_price,option_type)
-
-        strike_token = self.find_strike_token(token,option_type)
-        self.strike_token = strike_token.index[0].item()
-
-        self._expiry_date = self.find_expiry(strike_token)
-        
-        response = get_quote(self.strike_token, QuoteType.ltp)
-        if type(response) == dict:
-            raise Exception(response)
-        self.option_price = float(response)
-
-        self._option_type = option_type.value[0].lower()
+        strike_price: int = None,
+        underlying_price: float = None,
+    ):
+        self.start = time.perf_counter()
         self._interest_rate = 0.1
-        self.iv = self.find_IV()
-    
-    def find_underlying_price(self,token,underlying_price):
-        if underlying_price:
-            return underlying_price
-        else:
+
+        if not underlying_price:
             response = get_quote(token, QuoteType.ltp)
             if type(response) == dict:
+                logging.error(response)
                 raise Exception(response)
-            return float(response)
-        
-    def find_strike_price(self,strike_price,option_type):
-        if strike_price:
-            return strike_price
-        else:
-            if option_type == OptionType.call:
-                otm = math.ceil(self.underlying_price / 100) * 100
-                diff = otm - self.underlying_price
-                if diff < 10:
-                    return otm + 100
-                else:
-                    return otm
+            underlying_price = float(response)
 
-            elif option_type == OptionType.put:
-                otm = math.floor(self.underlying_price / 100) * 100
-                diff = self.underlying_price - otm
-                if diff < 10:
-                    return otm - 100
-                else:
-                    return otm
+        self.strike_token = self.__find_strike_tokens__(
+            token, option_type, underlying_price, strike_price
+        )
+        self.strike_token["optionType"] = option_type.value[0].lower()
+        self.__find_expiry__()
+        self.__find_option_price__()
+        self.__find_iv__()
+        self.__find_delta__()
+        # ! Check if below works or not
+        self.strike_token["optionType"] = option_type
+        logging.info(
+            f"Initializing OptionGeeks: {time.perf_counter() - self.start}"
+        )
 
-    def find_strike_token(self,token,option_type):
+    def __del__(self):
+        logging.info(
+            f"Deleting OptionGeeks : {time.perf_counter() - self.start}"
+        )
+
+    def __find_strike_tokens__(
+        self,
+        token: str,
+        option_type: OptionType,
+        underlying_price: float,
+        strike_price: int = None,
+    ):
         token_name = pd.read_hdf(
             DATASTORE, "cashTokens", mode="r", where=f"index=='{token}'"
         )["instrumentName"].values[0]
+        if strike_price:  # If strike price is given then find the exact strike
+            strike_token = pd.read_hdf(
+                DATASTORE,
+                "fnoTokens",
+                mode="r",
+                where=f"instrumentName == '{token_name}' & optionType=='{option_type.value}' & strike == {strike_price}",
+            )
+        else:  # If strike price is not given then find the strike price within 3% of underlying price
+            if option_type == OptionType.call:
+                upper_limit = underlying_price * 1.03
+                lower_limit = underlying_price * 1
+            elif option_type == OptionType.put:
+                upper_limit = underlying_price * 1
+                lower_limit = underlying_price * 0.97
 
-        strike_token = pd.read_hdf(
-            DATASTORE,
-            "fnoTokens",
-            mode="r",
-            where=f"instrumentName == '{token_name}' & strike=='{self.strike_price}' & optionType=='{option_type.value}' ",
-        )
-        return strike_token.head(1)
+            strike_token = pd.read_hdf(
+                DATASTORE,
+                "fnoTokens",
+                mode="r",
+                where=f"instrumentName == '{token_name}' & optionType=='{option_type.value}' & strike >= {lower_limit} & strike <= {upper_limit}",
+            )
 
-    def find_expiry(self,strike_token):
-        expiry = strike_token["expiry"].values[0]
-        expiry = datetime.strptime(expiry, "%d%b%y").astimezone(IST)+timedelta(hours=15,minutes=30)
-        
+        # First convert the expiry date to datetime object with tzinfo
+        strike_token["expiry"] = pd.to_datetime(
+            strike_token["expiry"], format="%d%b%y"
+        ).dt.tz_localize(IST) + timedelta(hours=15, minutes=30)
+        # Filter the data which are within next 1 week expiry
+        strike_token = strike_token[
+            (strike_token["expiry"] - datetime.now(IST)).dt.days <= 7
+        ]
+        strike_token = strike_token[
+            ["strike", "expiry", "lotSize", "optionType"]
+        ].sort_values("strike")
+        strike_token["underlyingPrice"] = underlying_price
+        return strike_token
+
+    def __find_option_price__(self):
+        for token in self.strike_token.index:
+            response = get_quote(token, QuoteType.ltp)
+            if type(response) == dict:
+                logging.error(response)
+                raise Exception(response)
+            option_price = float(response)
+            # Add the option price to the dataframe
+            self.strike_token.loc[token, "optionPrice"] = option_price
+        return
+
+    def __find_expiry__(self):
+        expiry = self.strike_token["expiry"]
         time_now = datetime.now(IST)
-        if time_now.hour>15 or (time_now.hour>=15 and time_now.minute>30):
-            curr_time = time_now.replace(hour=15,minute=30)
-        else :
-            curr_time = time_now
 
-        expiry_time = (expiry- curr_time).total_seconds()/(3600*24*365)
-        return expiry_time
-    
-    def find_IV(self):
-        iv = implied_volatility(
-            self.option_price,
-            self.underlying_price,
-            self.strike_price,
-            self._expiry_date,
-            self._interest_rate,
-            self._option_type,
-        )
-        return round(iv, 5)
+        duration_left = (expiry - time_now).dt.seconds / 3600 / 24 / 365
+        self.strike_token["expiry"] = duration_left
+        return
 
-    def find_delta(self):
-        d = delta(
-            self._option_type,
-            self.underlying_price,
-            self.strike_price,
-            self._expiry_date,
-            self._interest_rate,
-            self.iv,
-        )
-        return round(d, 5)
+    def __find_iv__(self):
+        for token, row in self.strike_token.iterrows():
+            iv = implied_volatility(
+                row["optionPrice"],
+                row["underlyingPrice"],
+                row["strike"],
+                row["expiry"],
+                self._interest_rate,
+                row["optionType"],
+            )
+            self.strike_token.loc[token, "iv"] = iv
 
-    def find_gamma(self):
-        g = gamma(
-            self._option_type,
-            self.underlying_price,
-            self.strike_price,
-            self._expiry_date,
-            self._interest_rate,
-            self.iv,
-        )
-        return round(g, 5)
+        return self.strike_token
 
-    def find_theta(self):
-        t = theta(
-            self._option_type,
-            self.underlying_price,
-            self.strike_price,
-            self._expiry_date,
-            self._interest_rate,
-            self.iv,
-        )
-        return round(t, 5)
+    def __find_delta__(self):
+        for token, row in self.strike_token.iterrows():
+            d = delta(
+                row["optionType"],
+                row["underlyingPrice"],
+                row["strike"],
+                row["expiry"],
+                self._interest_rate,
+                row["iv"],
+            )
+            self.strike_token.loc[token, "delta"] = d
 
-    def find_vega(self):
-        v = vega(
-            self._option_type,
-            self.underlying_price,
-            self.strike_price,
-            self._expiry_date,
-            self._interest_rate,
-            self.iv,
-        )
-        return round(v, 5)
-
-    def find_rho(self):
-        r = rho(
-            self._option_type,
-            self.underlying_price,
-            self.strike_price,
-            self._expiry_date,
-            self._interest_rate,
-            self.iv,
-        )
-        return round(r, 5)
+        return self.strike_token
 
     def find_all(self):
-        """
-        The function "find_all" returns a dictionary containing the values of various financial metrics
-        such as implied volatility, delta, gamma, theta, vega, and rho.
-        :return: a dictionary with keys "iv", "delta", "gamma", "theta", "vega", and "rho". The values
-        associated with these keys are the results of calling the corresponding methods `find_delta()`,
-        `find_gamma()`, `find_theta()`, `find_vega()`, and `find_rho()`.
-        """
-        iv = self.iv
-        d = self.find_delta()
-        g = self.find_gamma()
-        t = self.find_theta()
-        v = self.find_vega()
-        r = self.find_rho()
-        return {
-            "iv": iv,
-            "delta": d,
-            "gamma": g,
-            "theta": t,
-            "vega": v,
-            "rho": r,
-        }
+        for token, row in self.strike_token.iterrows():
+            r = rho(
+                row["optionType"],
+                row["underlyingPrice"],
+                row["strike"],
+                row["expiry"],
+                self._interest_rate,
+                row["iv"],
+            )
+            g = gamma(
+                row["optionType"],
+                row["underlyingPrice"],
+                row["strike"],
+                row["expiry"],
+                self._interest_rate,
+                row["iv"],
+            )
+            t = theta(
+                row["optionType"],
+                row["underlyingPrice"],
+                row["strike"],
+                row["expiry"],
+                self._interest_rate,
+                row["iv"],
+            )
+            v = vega(
+                row["optionType"],
+                row["underlyingPrice"],
+                row["strike"],
+                row["expiry"],
+                self._interest_rate,
+                row["iv"],
+            )
+            self.strike_token.loc[token, "rho"] = r
+            self.strike_token.loc[token, "gamma"] = g
+            self.strike_token.loc[token, "theta"] = t
+            self.strike_token.loc[token, "vega"] = v
+
+        return self.strike_token
 
 
 if __name__ == "__main__":
-    start = time.perf_counter()
-    og = OptionGeeks(11717, OptionType.call)
-    print(
-        og.find_all(),
-        og.strike_price,
-        og.iv,
-        og._expiry_date,
-        og.underlying_price,
-        og.option_price,
-        sep="\n",
-    )
+    nifty_call = OptionGeeks(11717, OptionType.call)
+    print(nifty_call.strike_token)
+    nifty_put = OptionGeeks(11717, OptionType.put)
+    print(nifty_put.strike_token)
+
+    banknifty_call = OptionGeeks(11721, OptionType.call)
+    print(banknifty_call.strike_token)
+    banknifty_put = OptionGeeks(11721, OptionType.put)
+    print(banknifty_put.strike_token)

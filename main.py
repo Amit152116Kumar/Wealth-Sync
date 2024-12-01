@@ -1,7 +1,7 @@
 __version__ = "1.0"
 __author__ = "Amit Kumar"
 
-import asyncio
+import asyncio  
 from typing import Optional
 
 import uvicorn
@@ -9,7 +9,7 @@ from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 
 from indicators import Indicator
 from livefeed import LiveFeed
-from models import *
+from utils import *
 from orderclient import OrderClient, get_quote
 from portfolio import Portfolio
 from watchlist import Watchlist
@@ -75,15 +75,17 @@ async def subscribe():
 def unsubscribe():
     global subscribed_flag
     if not subscribed_flag:
-        return {"status": "success", "message": "Already Unsubscribed"}
+        return {"status": "success", "message": "Subscribe First"}
 
     global portfolio, indicator, livefeed
     response = livefeed.unsubscribe()
-    if response["status"] == "success":
-        subscribed_flag = False
+    subscribed_flag = False
+    try:
         del livefeed
         del indicator
         del portfolio
+    except Exception as e:
+        response["Exception"] = e
     return response
 
 
@@ -120,7 +122,7 @@ def get_margin(
         transactionType = TransactionType.buy
     else:
         transactionType = TransactionType.sell
-        
+
     response = OrderClient().get_required_margin(
         transactionType, [OrderParams(token, quantity, price)]
     )
@@ -161,6 +163,7 @@ def get_Open_position(position_type: str):
 def get_tokens():
     response = Watchlist().fetch_tokens()
     return response
+
 
 
 if __name__ == "__main__":

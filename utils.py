@@ -1,10 +1,22 @@
 import datetime
 from dataclasses import dataclass, field
 from enum import Enum
+import logging
 
 import pytz
 
 IST = pytz.timezone("Asia/Kolkata")
+
+
+
+date_now = datetime.datetime.now(tz=IST).strftime("%Y-%m-%d")
+logging_handler = logging.FileHandler(f"logs/mylogger_{date_now}.log")
+logging_handler.setFormatter(
+    logging.Formatter(
+        "%(asctime)s - [%(module)s] - [%(funcName)s] - %(levelname)s - %(message)s"
+    )
+)
+logging_handler.setLevel(logging.INFO)
 
 
 class OrderType(Enum):

@@ -7,7 +7,7 @@ from imaplib import IMAP4_SSL
 from dotenv import load_dotenv
 
 from ks_api_client import ks_api
-from models import IST
+from utils import IST
 
 
 class KotakClient:

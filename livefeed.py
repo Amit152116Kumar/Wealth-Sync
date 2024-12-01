@@ -9,11 +9,10 @@ import pandas as pd
 
 from firestore import Firestore
 from kotakclient import KotakClient
-from models import IST
-from mylogger import logging_handler
+from utils import IST, logging_handler
 from observer_pattern import IEventListener, IEventManager
 
-logging.basicConfig(level=logging.DEBUG, handlers=[logging_handler])
+logging.basicConfig(level=logging.INFO, handlers=[logging_handler])
 
 
 class LiveFeed(IEventManager):
@@ -78,9 +77,7 @@ class LiveFeed(IEventManager):
                 "message": "Market will open at 9:15 AM.",
             }
 
-        if time_now.hour > 15 or (
-            time_now.hour == 15 and time_now.minute > 30
-        ):
+        if time_now.hour > 15 or (time_now.hour == 15 and time_now.minute > 30):
             return {
                 "status": "error",
                 "message": "Market is Closed for Today.",
@@ -97,6 +94,7 @@ class LiveFeed(IEventManager):
                 error_event=self.error_event,
             )
         except Exception as e:
+            logging.error(e)
             return {"status": "error", "message": f"{e}"}
         return {
             "status": "success",
@@ -107,9 +105,9 @@ class LiveFeed(IEventManager):
         try:
             KotakClient.get_client.unsubscribe()
         except Exception as e:
-            logging.debug(e)
+            logging.error(e)
             return {"status": "error", "message": f"{e}"}
-        logging.debug("Successfully Unsubscribed from Live feed 👍")
+        logging.info("Successfully Unsubscribed from Live feed 👍")
         return {
             "status": "success",
             "message": "Successfully Unsubscribed from Live feed 👍",
@@ -124,9 +122,9 @@ class LiveFeed(IEventManager):
             self._observers.remove(observer)
         return super().detachObserver(observer)
 
-    def notifyObserver(self, *args):
+    def notifyObserver(self, token: str, df: pd.DataFrame):
         for observer in self._observers:
-            observer.update(*args)
+            observer.update(token, df)
         return super().notifyObserver()
 
     # Callback method to receive live feed
@@ -144,9 +142,9 @@ class LiveFeed(IEventManager):
 
     @staticmethod
     def disconnect_event():
-        logging.debug("Disconnected from Live feed. Reconnecting...")
+        logging.info("Disconnected from Live feed. Reconnecting...")
         LiveFeed.startTime = time.perf_counter()
-        logging.debug(f"count :  {LiveFeed.count}")
+        logging.info(f"count :  {LiveFeed.count}")
         LiveFeed.count = 0
         for thread in LiveFeed.Threads:
             thread.join()
@@ -179,7 +177,7 @@ class LiveFeed(IEventManager):
     @staticmethod
     def connect_event():
         if LiveFeed.startTime is not None:
-            logging.debug(
+            logging.info(
                 f"Connected to Live feed.\tTime taken to reconnect : {time.perf_counter() - LiveFeed.startTime}"
             )
         return
